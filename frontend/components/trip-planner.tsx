@@ -1,12 +1,30 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Cloud, Loader2, Plane, Sparkles, Wand2 } from 'lucide-react'
+import {
+  Check,
+  Cloud,
+  History,
+  Loader2,
+  Plane,
+  Share2,
+  Sparkles,
+  Wand2,
+  X,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ItineraryView } from '@/components/itinerary-view'
 import { TripProgress } from '@/components/trip-progress'
 import { apiBaseUrl, type Itinerary, type TripProgressEvent } from '@/lib/trip'
+import {
+  addTripHistory,
+  clearTripHistory,
+  loadTripHistory,
+  removeTripHistory,
+  timeAgo,
+  type TripHistoryEntry,
+} from '@/lib/trip-history'
 
 const EXAMPLES = [
   { emoji: '🎡', label: '大阪三天兩夜親子自由行' },
@@ -21,9 +39,90 @@ export function TripPlanner() {
   const [itinerary, setItinerary] = useState<Itinerary | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [fromCache, setFromCache] = useState(false)
+  const [history, setHistory] = useState<TripHistoryEntry[]>([])
+  /** jobId whose share link was just copied, for the ✓ feedback. */
+  const [copiedId, setCopiedId] = useState<string | null>(null)
   const sourceRef = useRef<EventSource | null>(null)
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  useEffect(() => () => sourceRef.current?.close(), [])
+  useEffect(
+    () => () => {
+      sourceRef.current?.close()
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
+    },
+    [],
+  )
+
+  // localStorage is browser-only; read after mount to avoid hydration drift.
+  useEffect(() => {
+    setHistory(loadTripHistory())
+  }, [])
+
+  /** Fetch a finished job's stored result and show it (no pipeline re-run). */
+  const loadStored = useCallback(async (jobId: string, note?: string) => {
+    sourceRef.current?.close()
+    setSubmitting(true)
+    setItinerary(null)
+    setEvent(null)
+    setFromCache(false)
+
+    try {
+      const response = await fetch(`${apiBaseUrl()}/trips/${jobId}`)
+      if (!response.ok) throw new Error(`此紀錄已不存在 (${response.status})`)
+      const job = (await response.json()) as {
+        keyword?: string
+        itinerary?: { data?: Itinerary } | null
+      }
+      if (!job.itinerary?.data) throw new Error('此紀錄沒有可顯示的行程')
+
+      if (job.keyword) setKeyword(job.keyword)
+      setEvent({
+        jobId,
+        status: 'done',
+        progress: 100,
+        message: note ?? '已載入先前的查詢結果',
+      })
+      setItinerary(job.itinerary.data)
+      setFromCache(true)
+      // Keep the address bar shareable: copying it reopens this exact result.
+      window.history.replaceState(null, '', `/?job=${jobId}`)
+      return true
+    } catch (error) {
+      setEvent({
+        jobId: '',
+        status: 'failed',
+        progress: 100,
+        error: (error as Error).message,
+      })
+      return false
+    } finally {
+      setSubmitting(false)
+    }
+  }, [])
+
+  // A shared link (/?job=...) opens that stored result directly.
+  useEffect(() => {
+    const jobId = new URLSearchParams(window.location.search).get('job')
+    if (jobId) void loadStored(jobId, '已載入分享的行程')
+  }, [loadStored])
+
+  const copyShareLink = useCallback(async (jobId: string) => {
+    const url = `${window.location.origin}/?job=${jobId}`
+    try {
+      await navigator.clipboard.writeText(url)
+    } catch {
+      // Clipboard API blocked (e.g. plain-http origin) — legacy fallback.
+      const textarea = document.createElement('textarea')
+      textarea.value = url
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      textarea.remove()
+    }
+    setCopiedId(jobId)
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
+    copiedTimerRef.current = setTimeout(() => setCopiedId(null), 2000)
+  }, [])
 
   const start = useCallback(async (value: string, forceRefresh = false) => {
     const trimmed = value.trim()
@@ -64,6 +163,8 @@ export function TripPlanner() {
         })
         if (job.itinerary?.data) setItinerary(job.itinerary.data)
         setFromCache(true)
+        setHistory(addTripHistory({ jobId, keyword: trimmed }))
+        window.history.replaceState(null, '', `/?job=${jobId}`)
         return
       }
 
@@ -76,6 +177,10 @@ export function TripPlanner() {
         const payload = JSON.parse(message.data) as TripProgressEvent
         setEvent(payload)
         if (payload.itinerary) setItinerary(payload.itinerary)
+        if (payload.status === 'done') {
+          setHistory(addTripHistory({ jobId, keyword: trimmed }))
+          window.history.replaceState(null, '', `/?job=${jobId}`)
+        }
         if (payload.status === 'done' || payload.status === 'failed') source.close()
       }
 
@@ -98,6 +203,20 @@ export function TripPlanner() {
       setSubmitting(false)
     }
   }, [])
+
+  /** Show a previous query's stored result without re-running the pipeline. */
+  const openHistory = useCallback(
+    async (entry: TripHistoryEntry) => {
+      setKeyword(entry.keyword)
+      const ok = await loadStored(
+        entry.jobId,
+        `已載入先前的查詢結果（${timeAgo(entry.createdAt)}）`,
+      )
+      // The backend no longer has this job — drop the dead entry.
+      if (!ok) setHistory(removeTripHistory(entry.jobId))
+    },
+    [loadStored],
+  )
 
   const running = event !== null && event.status !== 'done' && event.status !== 'failed'
 
@@ -195,6 +314,62 @@ export function TripPlanner() {
           ))}
         </div>
 
+        {history.length > 0 && (
+          <div className="mx-auto mt-8 max-w-2xl rounded-2xl border border-border bg-card/70 p-4 shadow-sm backdrop-blur animate-in fade-in duration-500">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <History className="h-4 w-4 text-primary" />
+                先前的查詢
+              </div>
+              <button
+                type="button"
+                className="text-xs text-muted-foreground hover:text-destructive"
+                onClick={() => setHistory(clearTripHistory())}
+              >
+                清除全部
+              </button>
+            </div>
+            <ul className="mt-3 space-y-1.5">
+              {history.map((entry) => (
+                <li key={entry.jobId} className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={running || submitting}
+                    onClick={() => void openHistory(entry)}
+                    className="flex min-w-0 flex-1 items-baseline justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary/60 disabled:opacity-50"
+                  >
+                    <span className="truncate text-foreground">{entry.keyword}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {timeAgo(entry.createdAt)}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`分享 ${entry.keyword}`}
+                    title="複製分享連結"
+                    className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:text-primary"
+                    onClick={() => void copyShareLink(entry.jobId)}
+                  >
+                    {copiedId === entry.jobId ? (
+                      <Check className="h-3.5 w-3.5 text-primary" />
+                    ) : (
+                      <Share2 className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`移除 ${entry.keyword}`}
+                    className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:text-destructive"
+                    onClick={() => setHistory(removeTripHistory(entry.jobId))}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {event && (
           <div className="mt-10">
             <TripProgress event={event} />
@@ -218,6 +393,28 @@ export function TripPlanner() {
 
         {itinerary && (
           <div className="mt-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
+            {event?.jobId && (
+              <div className="mb-3 flex justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void copyShareLink(event.jobId)}
+                >
+                  {copiedId === event.jobId ? (
+                    <>
+                      <Check className="mr-1.5 h-4 w-4" />
+                      已複製連結
+                    </>
+                  ) : (
+                    <>
+                      <Share2 className="mr-1.5 h-4 w-4" />
+                      分享行程
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
             <ItineraryView itinerary={itinerary} />
           </div>
         )}

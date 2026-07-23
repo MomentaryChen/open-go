@@ -25,6 +25,9 @@ export type ItineraryItem = {
   description: string
   durationMinutes: number
   tips: string
+  /** Approximate coordinates from the LLM; absent on results generated before the map feature. */
+  latitude?: number | null
+  longitude?: number | null
   sourceUrls: string[]
 }
 

@@ -33,6 +33,16 @@ const ItinerarySchema = z.object({
           description: z.string(),
           durationMinutes: z.number(),
           tips: z.string(),
+          latitude: z
+            .number()
+            .nullable()
+            .describe(
+              'Approximate WGS84 latitude of the place; null when the item is not one fixed place (e.g. a multi-stop transfer)',
+            ),
+          longitude: z
+            .number()
+            .nullable()
+            .describe('Approximate WGS84 longitude; null when latitude is null'),
           sourceUrls: z
             .array(z.string())
             .describe('URLs of the supplied documents backing this item'),

@@ -1,5 +1,6 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import {
   BedDouble,
   CalendarDays,
@@ -8,6 +9,8 @@ import {
   Coins,
   ExternalLink,
   Lightbulb,
+  ListOrdered,
+  Map as MapIcon,
   MapPin,
   Plane,
   ShoppingBag,
@@ -17,8 +20,22 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import type { Itinerary, ItineraryItem } from '@/lib/trip'
+
+// Leaflet touches `window`; keep it out of the server render.
+const ItineraryMap = dynamic(
+  () => import('@/components/itinerary-map').then((module) => module.ItineraryMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-72 items-center justify-center rounded-xl border border-border bg-secondary/30 text-sm text-muted-foreground">
+        地圖載入中…
+      </div>
+    ),
+  },
+)
 
 const CATEGORY_META: Record<string, { label: string; icon: LucideIcon; className: string }> = {
   attraction: {
@@ -77,32 +94,51 @@ export function ItineraryView({ itinerary }: { itinerary: Itinerary }) {
         </div>
       </Card>
 
-      {itinerary.days.map((day, dayIndex) => (
-        <Card
-          key={day.day}
-          className="p-6 animate-in fade-in slide-in-from-bottom-4 duration-500 [animation-fill-mode:backwards]"
-          style={{ animationDelay: `${Math.min(dayIndex * 120, 600)}ms` }}
-        >
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent text-sm font-bold text-primary-foreground shadow-md shadow-primary/20">
-              D{day.day}
-            </span>
-            <div>
-              <p className="font-semibold text-foreground">Day {day.day}</p>
-              <p className="text-sm text-muted-foreground">{day.theme}</p>
-            </div>
-          </div>
-          <ol className="mt-5">
-            {day.items.map((item, index) => (
-              <TimelineItem
-                key={`${day.day}-${index}`}
-                item={item}
-                isLast={index === day.items.length - 1}
-              />
-            ))}
-          </ol>
-        </Card>
-      ))}
+      <Tabs defaultValue="itinerary">
+        <TabsList>
+          <TabsTrigger value="itinerary">
+            <ListOrdered className="mr-1.5 h-4 w-4" />
+            行程
+          </TabsTrigger>
+          <TabsTrigger value="map">
+            <MapIcon className="mr-1.5 h-4 w-4" />
+            地圖
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="itinerary" className="mt-4 space-y-6">
+          {itinerary.days.map((day, dayIndex) => (
+            <Card
+              key={day.day}
+              className="p-6 animate-in fade-in slide-in-from-bottom-4 duration-500 [animation-fill-mode:backwards]"
+              style={{ animationDelay: `${Math.min(dayIndex * 120, 600)}ms` }}
+            >
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent text-sm font-bold text-primary-foreground shadow-md shadow-primary/20">
+                  D{day.day}
+                </span>
+                <div>
+                  <p className="font-semibold text-foreground">Day {day.day}</p>
+                  <p className="text-sm text-muted-foreground">{day.theme}</p>
+                </div>
+              </div>
+              <ol className="mt-5">
+                {day.items.map((item, index) => (
+                  <TimelineItem
+                    key={`${day.day}-${index}`}
+                    item={item}
+                    isLast={index === day.items.length - 1}
+                  />
+                ))}
+              </ol>
+            </Card>
+          ))}
+        </TabsContent>
+
+        <TabsContent value="map" className="mt-4">
+          <ItineraryMap itinerary={itinerary} />
+        </TabsContent>
+      </Tabs>
 
       {itinerary.tips.length > 0 && (
         <Card className="border-accent/30 bg-accent/5 p-6">
