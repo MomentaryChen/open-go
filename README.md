@@ -1,4 +1,4 @@
-# go-one
+# open-go
 
 AI-powered travel planning platform. Enter a keyword and it builds multilingual search
 queries, crawls ~30 travel articles, and uses LLMs (Gemini/Claude) to compose a grounded

@@ -1,18 +1,18 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: go-one-postgres
+    container_name: open-go-postgres
     restart: "no"
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: go_one
+      POSTGRES_DB: open_go
     ports:
       - "35432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d go_one"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d open_go"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -20,11 +20,11 @@ services:
     build:
       context: ../backend
       dockerfile: Dockerfile
-    container_name: go-one-backend
+    container_name: open-go-backend
     restart: "no"
     environment:
       PORT: 3000
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/go_one?schema=public
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/open_go?schema=public
       TRIP_LLM_PROVIDER: ${TRIP_LLM_PROVIDER:-gemini}
       TRIP_MODEL: ${TRIP_MODEL:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
@@ -49,7 +49,7 @@ services:
     build:
       context: ../frontend
       dockerfile: Dockerfile
-    container_name: go-one-frontend
+    container_name: open-go-frontend
     restart: "no"
     environment:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}

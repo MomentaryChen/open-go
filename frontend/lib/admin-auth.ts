@@ -1,4 +1,4 @@
-export const ADMIN_COOKIE = 'go1_admin'
+export const ADMIN_COOKIE = 'opengo_admin'
 
 /**
  * Cookie value proving the admin password was presented: a salted SHA-256 of
@@ -11,7 +11,7 @@ export async function adminCookieValue(): Promise<string | null> {
   const password = process.env.ADMIN_PASSWORD || ''
   if (!password) return null
 
-  const data = new TextEncoder().encode(`go-one-admin:${password}`)
+  const data = new TextEncoder().encode(`open-go-admin:${password}`)
   const digest = await crypto.subtle.digest('SHA-256', data)
   return Array.from(new Uint8Array(digest))
     .map((byte) => byte.toString(16).padStart(2, '0'))
