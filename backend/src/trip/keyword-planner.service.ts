@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import * as z from 'zod/v4';
 import { SettingsService } from '../settings/settings.service';
+import { DEFAULT_PLANNER_PROMPT } from './prompts';
 import { STRUCTURED_LLM } from './llm/llm.types';
 import type { StructuredLlm } from './llm/llm.types';
 
@@ -40,15 +41,6 @@ const PlanSchema = z.object({
 
 export type TripPlan = z.infer<typeof PlanSchema>;
 
-/** Built-in default; admins can override it via the trip.plannerSystemPrompt setting. */
-export const DEFAULT_PLANNER_PROMPT = `You break a traveller's keyword down into search engine queries for a research crawler.
-
-Rules:
-- Detect the language the traveller wrote the keyword in and report it as outputLanguage (BCP-47, e.g. zh-TW, en, ja). Written Chinese without simplified characters should be treated as zh-TW.
-- Produce 6 to 10 queries, covering all five intents: attraction, food, transport, accommodation, itinerary.
-- Mix languages: at least two queries in the destination's local language, at least two in the traveller's own language, and at least two in English, so the crawler reaches local blogs, the traveller's community, and international guides.
-- Write queries the way a real person types them into Google — no boolean operators, no quotes, no site: filters.
-- Prefer queries that surface recent, specific, first-hand articles over generic landing pages.`;
 
 @Injectable()
 export class KeywordPlannerService {

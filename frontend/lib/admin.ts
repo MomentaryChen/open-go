@@ -69,6 +69,13 @@ export function deleteSetting(key: string) {
   )
 }
 
+export type PromptDefaults = { planner: string; composer: string }
+
+/** Built-in prompt defaults, used by the Prompt editor's reset button. */
+export function getPromptDefaults() {
+  return request<PromptDefaults>('/api/admin/settings/prompt-defaults')
+}
+
 export async function adminLogin(password: string) {
   const response = await fetch('/api/admin/login', {
     method: 'POST',

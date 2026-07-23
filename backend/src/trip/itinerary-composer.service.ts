@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import * as z from 'zod/v4';
 import { SettingsService } from '../settings/settings.service';
+import { DEFAULT_COMPOSER_PROMPT } from './prompts';
 import { STRUCTURED_LLM } from './llm/llm.types';
 import type { StructuredLlm } from './llm/llm.types';
 import { TripPlan } from './keyword-planner.service';
@@ -51,15 +52,6 @@ export type ComposerDocument = {
   content: string | null;
 };
 
-/** Built-in default; admins can override it via the trip.composerSystemPrompt setting. */
-export const DEFAULT_COMPOSER_PROMPT = `You turn crawled travel articles into one concrete, executable itinerary.
-
-Rules:
-- Ground every recommendation in the supplied documents. Never invent a place, price, or opening hour that no document mentions.
-- Every itinerary item must list the source URLs it came from, drawn only from the supplied documents.
-- Order each day geographically so the traveller is not criss-crossing the city; account for realistic travel time between items.
-- Include meals at sensible hours and note transport between distant items.
-- If the documents are thin on a topic, say so plainly in the tips rather than filling the gap with generic advice.`;
 
 /**
  * The itinerary is written in the language the traveller typed their keyword

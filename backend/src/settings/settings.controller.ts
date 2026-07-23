@@ -10,6 +10,10 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import {
+  DEFAULT_COMPOSER_PROMPT,
+  DEFAULT_PLANNER_PROMPT,
+} from '../trip/prompts';
 import { AdminGuard } from './admin.guard';
 import { SettingsService, SettingValueType } from './settings.service';
 
@@ -37,6 +41,19 @@ export class SettingsController {
   @Get()
   list() {
     return this.settings.list();
+  }
+
+  /**
+   * Built-in prompt defaults for the admin Prompt editor's reset button.
+   * Must be declared before the :key route so "prompt-defaults" is not
+   * treated as a setting key.
+   */
+  @Get('prompt-defaults')
+  promptDefaults() {
+    return {
+      planner: DEFAULT_PLANNER_PROMPT,
+      composer: DEFAULT_COMPOSER_PROMPT,
+    };
   }
 
   @Get(':key')

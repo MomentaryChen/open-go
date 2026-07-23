@@ -9,6 +9,7 @@
     "dev:backend:auto": "pnpm --filter backend start:dev:auto",
     "dev:frontend": "pnpm --filter frontend dev",
     "build": "pnpm -r build",
+    "screenshots": "node scripts/screenshots.mjs",
     "docker:build": "docker compose -f infra/docker-compose.yml build",
     "docker:up": "docker compose -f infra/docker-compose.yml up -d",
     "docker:migrate": "docker compose -f infra/docker-compose.yml exec backend ./node_modules/.bin/prisma migrate deploy",
