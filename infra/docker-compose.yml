@@ -1,0 +1,64 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: go-one-postgres
+    restart: "no"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: go_one
+    ports:
+      - "35432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d go_one"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: go-one-backend
+    restart: "no"
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/go_one?schema=public
+      TRIP_LLM_PROVIDER: ${TRIP_LLM_PROVIDER:-gemini}
+      TRIP_MODEL: ${TRIP_MODEL:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      TRIP_TARGET_DOCUMENTS: ${TRIP_TARGET_DOCUMENTS:-30}
+      TRIP_CRAWL_CONCURRENCY: ${TRIP_CRAWL_CONCURRENCY:-5}
+      TRIP_CACHE_TTL_DAYS: ${TRIP_CACHE_TTL_DAYS:-7}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    # Chromium (used to read Google's JS-rendered results) crashes on the 64MB default.
+    shm_size: "1gb"
+    # Call Prisma directly: running it through pnpm makes the container re-verify
+    # the dependency tree (and download a package manager) on every start.
+    command:
+      ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node dist/src/main.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "33000:3000"
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: go-one-frontend
+    restart: "no"
+    environment:
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # Service-DNS URL: the host-mapped port is unreachable from inside the network.
+      BACKEND_INTERNAL_URL: http://backend:3000
+    depends_on:
+      - backend
+    ports:
+      - "35173:3000"
+
+volumes:
+  postgres_data:

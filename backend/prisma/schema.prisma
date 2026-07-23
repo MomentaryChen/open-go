@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Region {
+  id          String   @id @default(cuid())
+  name        String
+  countryCode String   @default("TW")
+  lastDiscoveryAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  pois        Poi[]
+
+  @@unique([countryCode, name])
+}
+
+model Poi {
+  id            String   @id @default(cuid())
+  source        String
+  sourceId      String
+  regionId      String
+  name          String
+  category      String?
+  address       String?
+  rating        Float?
+  reviewCount   Int      @default(0)
+  latitude      Float?
+  longitude     Float?
+  contentHash   String
+  lastFetchedAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  region        Region   @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  reviewLinks   PoiReviewLink[]
+
+  @@unique([source, sourceId])
+  @@index([regionId])
+  @@index([lastFetchedAt])
+}
+
+model PoiReviewLink {
+  id            String   @id @default(cuid())
+  poiId         String
+  platform      String
+  url           String
+  generatedAt   DateTime @default(now())
+  poi           Poi      @relation(fields: [poiId], references: [id], onDelete: Cascade)
+
+  @@unique([poiId, platform])
+  @@index([platform])
+}
+
+model IngestionRequestCache {
+  id           String   @id @default(cuid())
+  source       String
+  endpoint     String
+  paramsHash   String
+  responseHash String
+  fetchedAt    DateTime @default(now())
+  expiresAt    DateTime
+
+  @@unique([source, endpoint, paramsHash])
+  @@index([expiresAt])
+}
+
+model SearchKeywordLog {
+  id        String   @id @default(cuid())
+  keyword   String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([keyword])
+}
+
+model TripJob {
+  id        String   @id @default(cuid())
+  keyword   String
+  status    String   @default("pending")
+  progress  Int      @default(0)
+  message   String?
+  error     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  queries   TripQuery[]
+  documents TripDocument[]
+  itinerary TripItinerary?
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model TripQuery {
+  id          String  @id @default(cuid())
+  jobId       String
+  query       String
+  intent      String?
+  language    String?
+  resultCount Int     @default(0)
+  job         TripJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+}
+
+model TripDocument {
+  id          String    @id @default(cuid())
+  jobId       String
+  url         String
+  title       String?
+  snippet     String?
+  content     String?
+  contentHash String?
+  status      String    @default("pending")
+  fetchedAt   DateTime?
+  job         TripJob   @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, url])
+  @@index([jobId, status])
+}
+
+model Setting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  valueType   String   @default("string") // 'string' | 'number' | 'boolean'
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model TripItinerary {
+  id        String   @id @default(cuid())
+  jobId     String   @unique
+  summary   String
+  data      Json
+  model     String
+  createdAt DateTime @default(now())
+  job       TripJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+}

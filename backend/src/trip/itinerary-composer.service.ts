@@ -1,0 +1,147 @@
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import * as z from 'zod/v4';
+import { SettingsService } from '../settings/settings.service';
+import { STRUCTURED_LLM } from './llm/llm.types';
+import type { StructuredLlm } from './llm/llm.types';
+import { TripPlan } from './keyword-planner.service';
+import { tripConfig } from './trip.config';
+
+const ItinerarySchema = z.object({
+  title: z.string(),
+  destination: z.string(),
+  durationDays: z.number(),
+  summary: z.string().describe('Two to four sentences describing the trip'),
+  bestSeason: z.string(),
+  budgetEstimate: z.string().describe('Rough per-person budget with currency'),
+  days: z.array(
+    z.object({
+      day: z.number(),
+      theme: z.string(),
+      items: z.array(
+        z.object({
+          time: z.string().describe('24h start time, e.g. 09:00'),
+          name: z.string(),
+          category: z.enum([
+            'attraction',
+            'food',
+            'shopping',
+            'transport',
+            'hotel',
+            'other',
+          ]),
+          description: z.string(),
+          durationMinutes: z.number(),
+          tips: z.string(),
+          sourceUrls: z
+            .array(z.string())
+            .describe('URLs of the supplied documents backing this item'),
+        }),
+      ),
+    }),
+  ),
+  tips: z.array(z.string()).describe('Practical trip-wide advice'),
+  references: z.array(z.object({ title: z.string(), url: z.string() })),
+});
+
+export type Itinerary = z.infer<typeof ItinerarySchema>;
+
+export type ComposerDocument = {
+  url: string;
+  title: string | null;
+  content: string | null;
+};
+
+/** Built-in default; admins can override it via the trip.composerSystemPrompt setting. */
+export const DEFAULT_COMPOSER_PROMPT = `You turn crawled travel articles into one concrete, executable itinerary.
+
+Rules:
+- Ground every recommendation in the supplied documents. Never invent a place, price, or opening hour that no document mentions.
+- Every itinerary item must list the source URLs it came from, drawn only from the supplied documents.
+- Order each day geographically so the traveller is not criss-crossing the city; account for realistic travel time between items.
+- Include meals at sensible hours and note transport between distant items.
+- If the documents are thin on a topic, say so plainly in the tips rather than filling the gap with generic advice.`;
+
+/**
+ * The itinerary is written in the language the traveller typed their keyword
+ * in (detected by the planner), regardless of the source documents' language.
+ */
+function languageRule(outputLanguage: string) {
+  return `\n- Write all user-facing text in ${outputLanguage}, even when the source documents are in another language.`;
+}
+
+@Injectable()
+export class ItineraryComposerService {
+  private readonly logger = new Logger(ItineraryComposerService.name);
+
+  constructor(
+    @Inject(STRUCTURED_LLM) private readonly llm: StructuredLlm,
+    private readonly settings: SettingsService,
+  ) {}
+
+  async compose(
+    keyword: string,
+    plan: TripPlan,
+    documents: ComposerDocument[],
+  ): Promise<Itinerary> {
+    const corpus = this.buildCorpus(documents);
+    if (!corpus.text) {
+      throw new Error(
+        'No crawled document content available to compose an itinerary',
+      );
+    }
+
+    const basePrompt = await this.settings.getString(
+      'trip.composerSystemPrompt',
+      DEFAULT_COMPOSER_PROMPT,
+    );
+    const itinerary = await this.llm.generate({
+      // The language rule is always appended so an admin-edited prompt cannot
+      // accidentally drop input-language matching.
+      system: basePrompt + languageRule(plan.outputLanguage || 'zh-TW'),
+      parts: [
+        { text: `<documents>\n${corpus.text}\n</documents>`, cacheable: true },
+        {
+          text: [
+            `Traveller keyword: ${keyword}`,
+            `Destination: ${plan.destination}`,
+            `Planned length: ${plan.durationDays} days`,
+            `Traveller style: ${plan.travelStyle}`,
+            '',
+            `Build a ${plan.durationDays}-day itinerary from the ${corpus.used} documents above.`,
+          ].join('\n'),
+        },
+      ],
+      schema: ItinerarySchema,
+      // Gemini counts thinking tokens against this budget, and a multi-day
+      // itinerary in Traditional Chinese is large; 16k truncated mid-JSON.
+      maxOutputTokens: 60000,
+      effort: 'high',
+    });
+
+    this.logger.log(
+      `Composed ${itinerary.days.length}-day itinerary from ${corpus.used} documents`,
+    );
+    return itinerary;
+  }
+
+  private buildCorpus(documents: ComposerDocument[]) {
+    const parts: string[] = [];
+    let budget = tripConfig.maxPromptCharsTotal;
+    let used = 0;
+
+    for (const document of documents) {
+      if (!document.content) continue;
+      const body = document.content.slice(
+        0,
+        tripConfig.maxPromptCharsPerDocument,
+      );
+      const block = `### ${document.title ?? document.url}\nURL: ${document.url}\n${body}`;
+      if (block.length > budget) break;
+      budget -= block.length;
+      used += 1;
+      parts.push(block);
+    }
+
+    return { text: parts.join('\n\n---\n\n'), used };
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "go-one",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@11.0.8",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "dev:backend": "pnpm --filter backend start:dev",
+    "dev:backend:auto": "pnpm --filter backend start:dev:auto",
+    "dev:frontend": "pnpm --filter frontend dev",
+    "build": "pnpm -r build",
+    "docker:build": "docker compose -f infra/docker-compose.yml build",
+    "docker:up": "docker compose -f infra/docker-compose.yml up -d",
+    "docker:migrate": "docker compose -f infra/docker-compose.yml exec backend ./node_modules/.bin/prisma migrate deploy",
+    "docker:down": "docker compose -f infra/docker-compose.yml down",
+    "docker:info": "docker compose -f infra/docker-compose.yml ps",
+    "docker:all": "pnpm docker:build && pnpm docker:up && pnpm docker:migrate && pnpm docker:info"
+  }
+}
