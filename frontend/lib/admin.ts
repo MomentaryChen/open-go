@@ -69,6 +69,13 @@ export function deleteSetting(key: string) {
   )
 }
 
+export type LlmProviderAvailability = { gemini: boolean; anthropic: boolean }
+
+/** Which LLM providers have an API key configured on the backend. */
+export function getLlmProviders() {
+  return request<LlmProviderAvailability>('/api/admin/settings/llm-providers')
+}
+
 export type PromptDefaults = { planner: string; composer: string }
 
 /** Built-in prompt defaults, used by the Prompt editor's reset button. */

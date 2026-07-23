@@ -56,6 +56,19 @@ export class SettingsController {
     };
   }
 
+  /**
+   * Which LLM providers have an API key configured, so the admin UI can
+   * disable the ones that would fail at generation time. Also declared
+   * before :key. Reports presence only — never the key values.
+   */
+  @Get('llm-providers')
+  llmProviders() {
+    return {
+      gemini: Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY),
+      anthropic: Boolean(process.env.ANTHROPIC_API_KEY),
+    };
+  }
+
   @Get(':key')
   get(@Param('key') key: string) {
     return this.settings.get(key);

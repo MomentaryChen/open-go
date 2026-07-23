@@ -50,6 +50,7 @@ import {
   type Setting,
   type SettingInput,
 } from '@/lib/admin'
+import { LlmSettingsCard } from '@/components/admin/llm-settings-card'
 
 const KEY_PATTERN = /^[a-zA-Z0-9._-]{1,100}$/
 
@@ -183,6 +184,8 @@ export default function AdminSettingsPage() {
           </Button>
         </div>
       </div>
+
+      <LlmSettingsCard settings={settings} onSaved={refresh} />
 
       <div className="rounded-lg border bg-background">
         <Table>
