@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { IngestionModule } from '../ingestion/ingestion.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SettingsModule } from '../settings/settings.module';
+import { BrowserFetcherService } from './browser-fetcher.service';
 import { CrawlerService } from './crawler.service';
 import { LlmModule } from './llm/llm.module';
 import { ItineraryComposerService } from './itinerary-composer.service';
@@ -18,6 +19,7 @@ import { TripService } from './trip.service';
   imports: [PrismaModule, LlmModule, SettingsModule, IngestionModule],
   controllers: [TripController],
   providers: [
+    BrowserFetcherService,
     CrawlerService,
     DuckDuckGoSearchProvider,
     GoogleSearchProvider,

@@ -60,7 +60,16 @@ export const tripConfig = {
   /** Google only serves results to a real browser; set false to force the fallback engine. */
   useBrowserSearch: process.env.TRIP_SEARCH_BROWSER !== 'false',
   browserHeadless: process.env.TRIP_BROWSER_HEADLESS !== 'false',
+  /**
+   * Retry a failed direct crawl through a headless browser. The plain fetch is
+   * blocked by anti-bot 403s and comes back empty on JavaScript-rendered pages;
+   * a real browser executes JS and carries a browser fingerprint, recovering
+   * many of those. Set false to disable (direct fetch only).
+   */
+  crawlBrowserFallback: process.env.TRIP_CRAWL_BROWSER_FALLBACK !== 'false',
   fetchTimeoutMs: 10000,
+  /** Navigation timeout for the browser crawl fallback; a real page render is slower than a plain fetch. */
+  browserFetchTimeoutMs: Number(process.env.TRIP_BROWSER_FETCH_TIMEOUT_MS ?? 20000),
   maxResponseBytes: 2 * 1024 * 1024,
   /**
    * Kept in step with the bundled Playwright Chromium major version: the browser

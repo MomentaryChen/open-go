@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as cheerio from 'cheerio';
 import { createHash } from 'crypto';
+import { BrowserFetcherService } from './browser-fetcher.service';
 import { tripConfig } from './trip.config';
 
 export type CrawlResult = {
@@ -15,6 +16,8 @@ export type CrawlResult = {
 @Injectable()
 export class CrawlerService {
   private readonly logger = new Logger(CrawlerService.name);
+
+  constructor(private readonly browser: BrowserFetcherService) {}
 
   /**
    * Fetches every url with bounded concurrency, invoking `onResult` as each
@@ -45,6 +48,29 @@ export class CrawlerService {
   }
 
   async crawl(url: string): Promise<CrawlResult> {
+    const direct = await this.fetchDirect(url);
+    if (direct.ok) return direct;
+
+    // A direct fetch is defeated by anti-bot 403s and JavaScript-rendered
+    // pages; retry those in a real browser before giving up.
+    if (this.browser.isEnabled()) {
+      const rendered = await this.fetchViaBrowser(url);
+      if (rendered.ok) {
+        this.logger.debug(
+          `browser fallback recovered ${url} (direct: ${direct.error})`,
+        );
+        return rendered;
+      }
+      // Surface the browser's error when it actually attempted a render, so the
+      // stored failure reflects the last thing tried rather than the 403.
+      return rendered.error ? rendered : direct;
+    }
+
+    this.logger.debug(`crawl failed ${url}: ${direct.error}`);
+    return direct;
+  }
+
+  private async fetchDirect(url: string): Promise<CrawlResult> {
     try {
       const response = await fetch(url, {
         headers: {
@@ -70,24 +96,34 @@ export class CrawlerService {
       }
 
       const html = await this.readCapped(response);
-      const { title, content } = this.extract(html);
-
-      if (!content || content.length < 200) {
-        return { url, ok: false, error: 'no extractable body text' };
-      }
-
-      return {
-        url,
-        title,
-        content,
-        contentHash: createHash('sha256').update(content).digest('hex'),
-        ok: true,
-      };
+      return this.buildResult(url, html);
     } catch (error) {
-      const message = (error as Error).message;
-      this.logger.debug(`crawl failed ${url}: ${message}`);
-      return { url, ok: false, error: message };
+      return { url, ok: false, error: (error as Error).message };
     }
+  }
+
+  private async fetchViaBrowser(url: string): Promise<CrawlResult> {
+    const html = await this.browser.fetch(url);
+    if (!html) {
+      return { url, ok: false, error: 'browser fetch returned no content' };
+    }
+    const capped = html.slice(0, tripConfig.maxResponseBytes);
+    return this.buildResult(url, capped);
+  }
+
+  /** Turn fetched HTML (from either path) into a CrawlResult. */
+  private buildResult(url: string, html: string): CrawlResult {
+    const { title, content } = this.extract(html);
+    if (!content || content.length < 200) {
+      return { url, ok: false, error: 'no extractable body text' };
+    }
+    return {
+      url,
+      title,
+      content,
+      contentHash: createHash('sha256').update(content).digest('hex'),
+      ok: true,
+    };
   }
 
   private async readCapped(response: Response) {
