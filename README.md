@@ -135,6 +135,13 @@ that is invalidated on every write). The settings page also has dedicated cards 
 **Pipeline tuning** (search / crawl / cache / queue concurrency) and **LLM model**
 selection so the common `trip.*` knobs are not buried only in the key/value table.
 
+The **Jobs** page (`/admin/jobs`) lists trip-generation runs with status/keyword filters.
+After an outage leaves a wave of failures, filter to `Failed` (and optionally a keyword)
+then use **Retry matching** / **Delete matching** — each call acts on up to 100 filtered
+rows and requires a status or keyword filter so “all jobs” cannot be wiped by accident.
+Stuck in-flight leftovers from a backend restart can be bulk-marked failed first via the
+stuck banner.
+
 Auth is deliberately lightweight: `ADMIN_PASSWORD` is checked by a login form which sets an
 httpOnly cookie (a salted SHA-256 digest — the plaintext never reaches the browser);
 `frontend/proxy.ts` gates `/admin/*` and `/api/admin/*`. Browser calls go through Next.js
