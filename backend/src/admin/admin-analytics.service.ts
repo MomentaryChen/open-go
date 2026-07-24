@@ -67,6 +67,51 @@ export class AdminAnalyticsService {
     });
   }
 
+  /**
+   * Top failure reasons from TripJob.error (exact string grouping).
+   * No taxonomy table — raw messages cluster naturally for stable pipeline errors
+   * (search blocked, crawl empty, LLM timeouts, etc.).
+   */
+  async failureReasons(days: number, limit: number) {
+    const since = this.daysAgo(days);
+
+    const [rows, totalRows] = await Promise.all([
+      this.prisma.$queryRaw<Array<{ error: string; count: bigint }>>`
+        SELECT error, COUNT(*) AS count
+        FROM "TripJob"
+        WHERE "createdAt" >= ${since}
+          AND status = 'failed'
+          AND error IS NOT NULL
+          AND error <> ''
+        GROUP BY error
+        ORDER BY count DESC
+        LIMIT ${limit}
+      `,
+      this.prisma.$queryRaw<Array<{ total: bigint }>>`
+        SELECT COUNT(*) AS total
+        FROM "TripJob"
+        WHERE "createdAt" >= ${since}
+          AND status = 'failed'
+          AND error IS NOT NULL
+          AND error <> ''
+      `,
+    ]);
+
+    const totalFailed = Number(totalRows[0]?.total ?? 0);
+
+    return {
+      totalFailed,
+      reasons: rows.map((row) => {
+        const count = Number(row.count);
+        return {
+          error: row.error,
+          count,
+          share: totalFailed ? count / totalFailed : 0,
+        };
+      }),
+    };
+  }
+
   /** Daily job volume with the done/failed split, oldest day first. */
   async trend(days: number) {
     const since = this.daysAgo(days);

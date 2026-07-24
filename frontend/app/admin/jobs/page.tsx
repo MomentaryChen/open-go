@@ -80,14 +80,19 @@ export default function AdminJobsPage() {
 function JobsPageContent() {
   const { t } = useLanguage()
   // Deep links from the keyword analytics page pre-fill the filter.
-  const initialKeyword = useSearchParams().get('keyword') ?? ''
+  const searchParams = useSearchParams()
+  const initialKeyword = searchParams.get('keyword') ?? ''
+  const statusParam = searchParams.get('status') ?? 'all'
+  const initialStatus = (STATUS_OPTIONS as readonly string[]).includes(statusParam)
+    ? statusParam
+    : 'all'
 
   const [items, setItems] = useState<JobSummary[]>([])
   const [total, setTotal] = useState(0)
   const [stats, setStats] = useState<JobStats | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const [status, setStatus] = useState('all')
+  const [status, setStatus] = useState(initialStatus)
   const [keywordInput, setKeywordInput] = useState(initialKeyword)
   const [keyword, setKeyword] = useState(initialKeyword)
   const [page, setPage] = useState(1)

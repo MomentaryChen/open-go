@@ -223,9 +223,13 @@ export const zh = {
   explore: {
     badge: '行程探索',
     heading: '大家查過的行程',
-    subtitle: '所有 AI 產生過的旅程，依區域分類，點任一張卡片看完整的逐日規劃。',
+    subtitle: '所有 AI 產生過的旅程，可用關鍵字搜尋或依區域分類，點任一張卡片看完整的逐日規劃。',
     empty: '還沒有任何已完成的行程。',
     emptyCta: '去規劃第一個行程 →',
+    searchPlaceholder: '搜尋關鍵字、標題或地點…',
+    searchAria: '搜尋行程',
+    clearSearch: '清除搜尋',
+    noResults: '找不到符合「{query}」的行程。',
     filterByRegion: '依區域篩選',
     all: '全部',
     countLine: '共 {trips} 個行程 · {regions} 個地區',
@@ -259,7 +263,7 @@ export const zh = {
     description:
       '輸入關鍵字，AI 讀遍網路遊記，為你排出逐日可執行的旅程，每個行程都附上資料來源。',
     exploreTitle: '探索行程 ｜ OpenGo',
-    exploreDescription: '瀏覽所有 AI 產生過的旅遊行程，依區域分類，點進去看逐日規劃。',
+    exploreDescription: '瀏覽所有 AI 產生過的旅遊行程，可用關鍵字搜尋或依區域分類，點進去看逐日規劃。',
     tripNotFoundTitle: '找不到這個行程 ｜ OpenGo',
     tripTitle: '{title}｜{destination} {days} 天行程',
     tripDescription: 'AI 依據 {sources} 篇網路遊記整理的 {destination} {days} 天行程。',
@@ -460,6 +464,12 @@ export const zh = {
       chartFailed: '失敗',
       chartEmpty: '此區間沒有資料',
       chartTooltip: '{date}\n總計 {total} · 成功 {done} · 失敗 {failed}',
+      reasonsTitle: '失敗原因 Top-N',
+      reasonsIntro:
+        '依 TripJob.error 原文分群（搜尋被擋、抓取為空、LLM timeout 等），不另建錯誤分類表。',
+      reasonsEmpty: '此區間沒有帶錯誤訊息的失敗任務',
+      reasonsTotal: '共 {n} 筆帶錯誤訊息的失敗任務',
+      reasonsCol: { error: '錯誤訊息', count: '次數', share: '占比' },
     },
 
     prompts: {

@@ -104,6 +104,9 @@ pnpm dev:frontend
 
 Progress is pushed over SSE, so the frontend shows each stage live.
 
+Finished trips are also listed on `/explore`, where visitors can search by keyword /
+title / destination and filter by region before opening a day-by-day plan.
+
 ### Booking & ticket deep links
 
 Finished itineraries surface outbound CTAs (visually separate from cited sources):
@@ -154,6 +157,10 @@ httpOnly cookie (a salted SHA-256 digest — the plaintext never reaches the bro
 server routes that forward to the backend with an `x-admin-key` header, so the shared
 secret also never leaves the server. The backend guards `/settings` with the same header
 and fails closed when `ADMIN_PASSWORD` is unset.
+
+Keyword analytics at `/admin/keywords` shows demand, failure rate, content gaps, crawl-host
+health, and a top-N failure-reason panel grouped from existing `TripJob.error` text
+(`GET /ops/analytics/failure-reasons`) — no separate error-code table.
 
 Job debugging lives at `/admin/jobs/[id]`: traveller preferences (when set), a link that
 opens the public `/trip/[jobId]` page, the job-level failure message, and per-document
