@@ -280,6 +280,7 @@ export const zh = {
       jobs: '任務監控',
       keywords: '關鍵字分析',
       affiliate: 'Affiliate 漏斗',
+      llmUsage: 'LLM 用量',
       prompts: 'Prompt 管理',
       settings: '系統設定',
     },
@@ -546,6 +547,35 @@ export const zh = {
       colPartner: '夥伴',
       colCategory: '品類',
       ctr: 'CTR',
+    },
+
+    llmUsage: {
+      title: 'LLM 用量',
+      subtitle: 'Claude／Gemini 呼叫的每日 token 用量與估算費用',
+      stat: {
+        calls: 'API 呼叫數',
+        inputTokens: '輸入 tokens',
+        outputTokens: '輸出 tokens',
+        estimatedCost: '估算費用',
+        estimatedCostHint: '依牌價估算；無價格資料的模型不計入',
+      },
+      chartTitle: '每日 tokens',
+      chartInput: '輸入（含快取）',
+      chartOutput: '輸出（含思考）',
+      chartEmpty: '此區間沒有 LLM 呼叫',
+      chartTooltip: '{date}：輸入 {input}／輸出 {output} tokens，約 {cost}',
+      byModelTitle: '依模型',
+      col: {
+        model: '模型',
+        calls: '呼叫數',
+        input: '輸入',
+        output: '輸出',
+        cacheRead: '快取讀取',
+        thinking: '思考',
+        cost: '估算費用',
+      },
+      empty: '尚無用量紀錄——token 記錄自本版本開始',
+      unknownPrice: '無價格資料',
     },
 
     pipeline: {

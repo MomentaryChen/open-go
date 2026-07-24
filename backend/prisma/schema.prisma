@@ -175,6 +175,26 @@ model SettingHistory {
   @@index([createdAt])
 }
 
+/// One row per LLM API call. Recorded even when the response later fails
+/// schema validation — the tokens were still billed. Powers the admin daily
+/// token / estimated-cost view.
+model LlmUsage {
+  id               String   @id @default(cuid())
+  provider         String // 'anthropic' | 'gemini'
+  model            String
+  inputTokens      Int      @default(0)
+  outputTokens     Int      @default(0)
+  cacheReadTokens  Int      @default(0)
+  cacheWriteTokens Int      @default(0)
+  /// Gemini reasoning tokens, billed at the output rate but reported separately;
+  /// Anthropic already folds thinking into outputTokens.
+  thinkingTokens   Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([provider, model, createdAt])
+}
+
 model TripItinerary {
   id        String   @id @default(cuid())
   jobId     String   @unique
