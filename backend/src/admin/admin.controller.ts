@@ -64,6 +64,35 @@ export class AdminController {
     return this.jobs.failStuck(Math.floor(minutes));
   }
 
+  /**
+   * Retry every job matching the list filters (status and/or keyword).
+   * Declared before `jobs/:id` so "batch-retry" is not parsed as an id.
+   */
+  @Post('jobs/batch-retry')
+  batchRetry(
+    @Body()
+    body?: { status?: string; keyword?: string; limit?: number },
+  ) {
+    return this.jobs.batchRetry({
+      status: body?.status?.trim() || undefined,
+      keyword: body?.keyword?.trim() || undefined,
+      limit: this.clampOptionalLimit(body?.limit),
+    });
+  }
+
+  /** Delete every job matching the list filters (status and/or keyword). */
+  @Post('jobs/batch-delete')
+  batchDelete(
+    @Body()
+    body?: { status?: string; keyword?: string; limit?: number },
+  ) {
+    return this.jobs.batchDelete({
+      status: body?.status?.trim() || undefined,
+      keyword: body?.keyword?.trim() || undefined,
+      limit: this.clampOptionalLimit(body?.limit),
+    });
+  }
+
   @Get('jobs/:id')
   jobDetail(@Param('id') id: string) {
     return this.jobs.detail(id);
@@ -166,5 +195,11 @@ export class AdminController {
     const value = Number(raw);
     if (!Number.isFinite(value)) return fallback;
     return Math.min(Math.max(Math.floor(value), min), max);
+  }
+
+  private clampOptionalLimit(raw: number | undefined): number | undefined {
+    if (raw === undefined || raw === null) return undefined;
+    if (!Number.isFinite(raw)) return undefined;
+    return Math.min(Math.max(Math.floor(raw), 1), 100);
   }
 }
