@@ -111,7 +111,13 @@ structured error (`{ code, message }`). The same rules run client-side for insta
 Progress is pushed over SSE, so the frontend shows each stage live.
 
 Finished trips are also listed on `/explore`, where visitors can search by keyword /
-title / destination and filter by region before opening a day-by-day plan.
+title / destination and filter by region before opening a day-by-day plan. Admins
+curate the gallery from the Jobs console (`PATCH /ops/jobs/:id/curation`): itineraries
+can be **pinned** to the top, **featured**, or **hidden** from the public list.
+
+Public itinerary pages are indexable: `/sitemap.xml` (`app/sitemap.ts`) enumerates
+finished trips and `/robots.txt` (`app/robots.ts`) points crawlers at it, so shared
+plans can be discovered by search engines.
 
 ### Booking & ticket deep links
 
@@ -178,6 +184,12 @@ leaves the active list but remains available to retry or inspect.
 Keyword analytics at `/admin/keywords` shows demand, failure rate, content gaps, crawl-host
 health, and a top-N failure-reason panel grouped from existing `TripJob.error` text
 (`GET /ops/analytics/failure-reasons`) — no separate error-code table.
+
+LLM cost tracking lives at `/admin/llm-usage` (`GET /ops/analytics/llm-usage`): every
+Anthropic/Gemini call records its billed tokens (input, output, cache read/write,
+thinking) to the `LlmUsage` table, captured fire-and-forget so bookkeeping can never fail
+the call itself. The page shows daily and per-model rollups with list-price cost estimates
+(unknown models are reported without a cost rather than a wrong number).
 
 Job debugging lives at `/admin/jobs/[id]`: traveller preferences (when set), a link that
 opens the public `/trip/[jobId]` page, the job-level failure message, and per-document
