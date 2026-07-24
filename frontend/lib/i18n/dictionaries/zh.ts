@@ -281,6 +281,7 @@ export const zh = {
     brand: 'Travel Discovery',
     sidebarTitle: '管理後台',
     nav: {
+      health: '系統健康',
       jobs: '任務監控',
       keywords: '關鍵字分析',
       affiliate: 'Affiliate 漏斗',
@@ -656,6 +657,50 @@ export const zh = {
       confirmRun: '執行清理',
       cleaned: '清理完成',
       cleanedDesc: '清除 {content} 筆內文、刪除 {jobs} 個任務、{cache} 筆過期快取',
+    },
+
+    health: {
+      title: '系統健康',
+      subtitle: '任務大面積失敗時先看這裡：資料庫、瀏覽器、LLM 金鑰、佇列與近 24 小時成功率',
+      overall: '整體狀態',
+      checkedAt: '檢查時間 {time}',
+      status: {
+        ok: '正常',
+        warn: '需注意',
+        error: '異常',
+      },
+      database: {
+        title: '資料庫',
+        latency: '延遲 {ms} ms',
+      },
+      browsers: {
+        title: 'Playwright／搜尋瀏覽器',
+        search: '搜尋瀏覽器',
+        crawl: '爬蟲後備瀏覽器',
+        chromium: 'Chromium',
+        enabled: '已啟用',
+        disabled: '已停用',
+        launched: '執行中',
+        idle: '尚未啟動',
+        available: '可用 {version}',
+        unavailable: '無法啟動',
+      },
+      llm: {
+        title: 'LLM API 金鑰',
+        active: '目前使用：{provider} · {model}',
+        configured: '已設定',
+        missing: '未設定',
+      },
+      queue: {
+        title: '佇列',
+        running: '執行中',
+        queued: '排隊中',
+      },
+      last24h: {
+        title: '近 24 小時成功率',
+        doneFailed: '成功 {done} · 失敗 {failed}',
+        noFinished: '尚無已完成任務',
+      },
     },
   },
 }

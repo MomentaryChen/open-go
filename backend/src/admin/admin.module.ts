@@ -2,9 +2,11 @@ import { Module } from '@nestjs/common';
 import { AffiliateModule } from '../affiliate/affiliate.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { RetentionModule } from '../retention/retention.module';
+import { SettingsModule } from '../settings/settings.module';
 import { TripModule } from '../trip/trip.module';
 import { AdminAnalyticsService } from './admin-analytics.service';
 import { AdminController } from './admin.controller';
+import { AdminHealthService } from './admin-health.service';
 import { AdminJobsService } from './admin-jobs.service';
 
 /**
@@ -13,8 +15,14 @@ import { AdminJobsService } from './admin-jobs.service';
  * pipeline rather than duplicating its logic.
  */
 @Module({
-  imports: [PrismaModule, TripModule, RetentionModule, AffiliateModule],
+  imports: [
+    PrismaModule,
+    TripModule,
+    RetentionModule,
+    AffiliateModule,
+    SettingsModule,
+  ],
   controllers: [AdminController],
-  providers: [AdminJobsService, AdminAnalyticsService],
+  providers: [AdminJobsService, AdminAnalyticsService, AdminHealthService],
 })
 export class AdminModule {}
