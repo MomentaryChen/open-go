@@ -79,6 +79,15 @@ export const zh = {
     connectionLostResumable: '與伺服器的連線中斷，行程可能仍在產生中——稍後可從「先前的查詢」接續。',
     createJobFailed: '建立任務失敗 ({status})',
     readCacheFailed: '讀取快取結果失敗',
+    keywordError: {
+      KEYWORD_TOO_SHORT: '請輸入至少 2 個字的旅遊關鍵字',
+      KEYWORD_TOO_LONG: '關鍵字不能超過 200 個字',
+      KEYWORD_HAS_URL: '請輸入旅遊目的地，不要貼網址',
+      KEYWORD_HAS_HTML: '關鍵字含有無效的 HTML 內容',
+      KEYWORD_NO_WORDS: '請輸入包含文字的旅遊關鍵字',
+      KEYWORD_CONTROL_CHARS: '關鍵字含有無效字元',
+      KEYWORD_EXCESSIVE_SPECIAL: '特殊符號太多，請輸入正常的旅遊關鍵字',
+    },
   },
 
   tripProgress: {

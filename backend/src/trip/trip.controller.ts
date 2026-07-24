@@ -10,6 +10,7 @@ import {
 import { Observable, map } from 'rxjs';
 import { TripEventsService } from './trip-events.service';
 import { TripService } from './trip.service';
+import { validateKeyword } from './keyword-validator';
 import { normalizePreferences } from './trip-preferences';
 
 type CreateTripDto = {
@@ -27,13 +28,11 @@ export class TripController {
 
   @Post()
   async create(@Body() body: CreateTripDto) {
-    const keyword = body?.keyword?.trim();
-    if (!keyword) {
-      throw new BadRequestException('keyword is required');
+    const check = validateKeyword(body?.keyword);
+    if (!check.ok) {
+      throw new BadRequestException({ code: check.code, message: check.message });
     }
-    if (keyword.length > 200) {
-      throw new BadRequestException('keyword must be 200 characters or fewer');
-    }
+    const keyword = (body.keyword as string).trim();
 
     const preferences = normalizePreferences(body?.preferences);
     const { job, cached } = await this.tripService.createJob(
