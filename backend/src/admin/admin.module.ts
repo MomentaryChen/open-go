@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AffiliateModule } from '../affiliate/affiliate.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { RetentionModule } from '../retention/retention.module';
 import { TripModule } from '../trip/trip.module';
@@ -12,7 +13,7 @@ import { AdminJobsService } from './admin-jobs.service';
  * pipeline rather than duplicating its logic.
  */
 @Module({
-  imports: [PrismaModule, TripModule, RetentionModule],
+  imports: [PrismaModule, TripModule, RetentionModule, AffiliateModule],
   controllers: [AdminController],
   providers: [AdminJobsService, AdminAnalyticsService],
 })

@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Post } from '@nestjs/common';
+import { AffiliateConfigService } from './affiliate-config.service';
 import {
   AFFILIATE_CATEGORIES,
   AFFILIATE_EVENTS,
@@ -20,7 +21,19 @@ type CreateAffiliateEventDto = {
 
 @Controller('affiliate')
 export class AffiliateController {
-  constructor(private readonly affiliate: AffiliateService) {}
+  constructor(
+    private readonly affiliate: AffiliateService,
+    private readonly config: AffiliateConfigService,
+  ) {}
+
+  /**
+   * Public affiliate ids, so the itinerary link builder can inject them into
+   * outbound URLs. Values are non-secret (they appear in those URLs anyway).
+   */
+  @Get('config')
+  getConfig() {
+    return this.config.getConfig();
+  }
 
   /** Public ingest for itinerary CTA funnel events (no admin key). */
   @Post('events')

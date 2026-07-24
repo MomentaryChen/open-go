@@ -62,6 +62,30 @@ export class SettingsService {
     return { ok: true };
   }
 
+  /**
+   * Create the row when missing, otherwise update its value — for callers that
+   * persist a fixed set of known keys (e.g. affiliate IDs) and don't care
+   * whether the row already existed. Every write is audited via record().
+   */
+  async setString(key: string, value: string, description?: string) {
+    const existing = await this.prisma.setting.findUnique({ where: { key } });
+    if (existing) {
+      const setting = await this.prisma.setting.update({
+        where: { key },
+        data: { value, description },
+      });
+      this.invalidate();
+      await this.record('update', key, existing.value, setting);
+      return setting;
+    }
+    const setting = await this.prisma.setting.create({
+      data: { key, value, valueType: 'string', description },
+    });
+    this.invalidate();
+    await this.record('create', key, null, setting);
+    return setting;
+  }
+
   /** Audit trail for one key, newest first. */
   async history(key: string, limit = 50) {
     return this.prisma.settingHistory.findMany({

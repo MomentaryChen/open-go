@@ -7,6 +7,8 @@ import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -25,7 +27,10 @@ import {
 import { formatDateTime, formatPercent } from '@/components/admin/job-status-badge'
 import {
   getAffiliateAnalytics,
+  getAffiliateConfig,
+  saveAffiliateConfig,
   type AffiliateAnalytics,
+  type AffiliateConfig,
   type AffiliateFunnelCounts,
 } from '@/lib/admin'
 
@@ -48,6 +53,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 
 const PARTNER_LABEL: Record<string, string> = {
   booking: 'Booking.com',
+  trip: 'Trip.com',
   agoda: 'Agoda',
   google_hotels: 'Google 飯店',
   klook: 'Klook',
@@ -104,6 +110,8 @@ export default function AdminAffiliatePage() {
           </Button>
         </div>
       </div>
+
+      <AffiliateConfigCard />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="曝光 (impression)" value={fmt(summary?.impressions)} />
@@ -238,6 +246,129 @@ export default function AdminAffiliatePage() {
           </Table>
         )}
       </Card>
+    </div>
+  )
+}
+
+const EMPTY_CONFIG: AffiliateConfig = {
+  booking: { aid: '' },
+  trip: { allianceid: '', sid: '' },
+  klook: { aid: '' },
+  kkday: { cid: '' },
+}
+
+function AffiliateConfigCard() {
+  const [config, setConfig] = useState<AffiliateConfig>(EMPTY_CONFIG)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    void (async () => {
+      try {
+        const data = await getAffiliateConfig()
+        if (active) setConfig(data)
+      } catch (error) {
+        toast.error((error as Error).message)
+      } finally {
+        if (active) setLoading(false)
+      }
+    })()
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      setConfig(await saveAffiliateConfig(config))
+      toast.success('已儲存 affiliate 參數')
+    } catch (error) {
+      toast.error((error as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Card className="p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold">Affiliate 參數設定</h2>
+          <p className="text-xs text-muted-foreground">
+            填入各家聯盟 ID，會注入行程頁住宿／票券外連連結。留空＝不帶該參數。
+          </p>
+        </div>
+        <Button size="sm" onClick={() => void save()} disabled={loading || saving}>
+          {saving ? '儲存中…' : '儲存'}
+        </Button>
+      </div>
+      <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <ConfigField
+          label="Booking.com — aid"
+          value={config.booking.aid}
+          disabled={loading}
+          onChange={(v) => setConfig((c) => ({ ...c, booking: { aid: v } }))}
+        />
+        <ConfigField
+          label="Trip.com — Allianceid"
+          value={config.trip.allianceid}
+          disabled={loading}
+          onChange={(v) =>
+            setConfig((c) => ({ ...c, trip: { ...c.trip, allianceid: v } }))
+          }
+        />
+        <ConfigField
+          label="Trip.com — SID"
+          value={config.trip.sid}
+          disabled={loading}
+          onChange={(v) =>
+            setConfig((c) => ({ ...c, trip: { ...c.trip, sid: v } }))
+          }
+        />
+        <ConfigField
+          label="Klook — aid"
+          value={config.klook.aid}
+          disabled={loading}
+          onChange={(v) => setConfig((c) => ({ ...c, klook: { aid: v } }))}
+        />
+        <ConfigField
+          label="KKday — cid"
+          value={config.kkday.cid}
+          disabled={loading}
+          onChange={(v) => setConfig((c) => ({ ...c, kkday: { cid: v } }))}
+        />
+      </div>
+    </Card>
+  )
+}
+
+function ConfigField({
+  label,
+  value,
+  disabled,
+  onChange,
+}: {
+  label: string
+  value: string
+  disabled?: boolean
+  onChange: (value: string) => void
+}) {
+  const id = label.replace(/[^a-z0-9]+/gi, '-').toLowerCase()
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id} className="text-xs">
+        {label}
+      </Label>
+      <Input
+        id={id}
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="留空＝停用"
+        autoComplete="off"
+      />
     </div>
   )
 }

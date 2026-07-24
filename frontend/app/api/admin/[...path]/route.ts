@@ -39,6 +39,10 @@ export async function POST(request: NextRequest, { params }: Params) {
   return proxy(request, params, 'POST')
 }
 
+export async function PUT(request: NextRequest, { params }: Params) {
+  return proxy(request, params, 'PUT')
+}
+
 export async function PATCH(request: NextRequest, { params }: Params) {
   return proxy(request, params, 'PATCH')
 }

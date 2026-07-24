@@ -27,6 +27,8 @@ import {
   lodgingSearchLinks,
   shouldShowTicketCta,
   ticketSearchLinks,
+  useAffiliateConfig,
+  type AffiliateConfig,
 } from '@/lib/affiliate'
 import { cn } from '@/lib/utils'
 import {
@@ -113,6 +115,7 @@ export function ItineraryView({
   /** Trip job id for affiliate funnel events (Phase 0). */
   jobId?: string
 }) {
+  const affiliateConfig = useAffiliateConfig()
   return (
     <div className="space-y-6">
       {/* Boarding-pass style cover */}
@@ -172,6 +175,7 @@ export function ItineraryView({
                     day={day.day}
                     destination={itinerary.destination}
                     jobId={jobId}
+                    affiliateConfig={affiliateConfig}
                     isLast={index === day.items.length - 1}
                   />
                 ))}
@@ -208,6 +212,7 @@ export function ItineraryView({
                               longitude: day.stay.longitude,
                             }
                           : null,
+                        affiliateConfig,
                       ).map((link) => (
                         <AffiliateCta
                           key={link.partner}
@@ -287,12 +292,14 @@ function TimelineItem({
   day,
   destination,
   jobId,
+  affiliateConfig,
   isLast,
 }: {
   item: ItineraryItem
   day: number
   destination: string
   jobId: string
+  affiliateConfig: AffiliateConfig | null
   isLast: boolean
 }) {
   const meta = CATEGORY_META[item.category] ?? CATEGORY_META.other
@@ -301,7 +308,7 @@ function TimelineItem({
   const showMap = item.category !== 'transport'
   const showTickets = shouldShowTicketCta(item)
   const tickets = showTickets
-    ? ticketSearchLinks(destination, item.name)
+    ? ticketSearchLinks(destination, item.name, affiliateConfig)
     : null
 
   return (

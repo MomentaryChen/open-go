@@ -6,9 +6,12 @@ import {
   Get,
   Param,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { AffiliateConfigService } from '../affiliate/affiliate-config.service';
+import type { AffiliateConfigInput } from '../affiliate/affiliate-config.service';
 import { RetentionService } from '../retention/retention.service';
 import { AdminGuard } from '../settings/admin.guard';
 import { AdminAnalyticsService } from './admin-analytics.service';
@@ -26,6 +29,7 @@ export class AdminController {
     private readonly jobs: AdminJobsService,
     private readonly analytics: AdminAnalyticsService,
     private readonly retention: RetentionService,
+    private readonly affiliateConfig: AffiliateConfigService,
   ) {}
 
   @Get('jobs')
@@ -115,6 +119,18 @@ export class AdminController {
       this.parseInt(days, 30, 1, 365),
       this.parseInt(limit, 50, 1, 200),
     );
+  }
+
+  /** Current affiliate ids, for the admin config form to prefill. */
+  @Get('affiliate/config')
+  getAffiliateConfig() {
+    return this.affiliateConfig.getConfig();
+  }
+
+  /** Save affiliate ids entered in the admin console. */
+  @Put('affiliate/config')
+  saveAffiliateConfig(@Body() body: AffiliateConfigInput) {
+    return this.affiliateConfig.saveConfig(body ?? {});
   }
 
   /** Current storage footprint, and what a sweep would reclaim. */

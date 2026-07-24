@@ -344,6 +344,28 @@ export function getAffiliateAnalytics(days = 30, limit = 50) {
 }
 
 // ---------------------------------------------------------------------------
+// Affiliate partner ids (injected into outbound CTA URLs)
+// ---------------------------------------------------------------------------
+
+export type AffiliateConfig = {
+  booking: { aid: string }
+  trip: { allianceid: string; sid: string }
+  klook: { aid: string }
+  kkday: { cid: string }
+}
+
+export function getAffiliateConfig() {
+  return request<AffiliateConfig>('/api/admin/ops/affiliate/config')
+}
+
+export function saveAffiliateConfig(input: AffiliateConfig) {
+  return request<AffiliateConfig>('/api/admin/ops/affiliate/config', {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Data retention
 // ---------------------------------------------------------------------------
 

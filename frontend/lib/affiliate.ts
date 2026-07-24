@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { track } from '@vercel/analytics'
 import { apiBaseUrl } from '@/lib/trip'
 
@@ -10,6 +11,55 @@ export type AffiliatePartner =
   | 'kkday'
 
 export type AffiliateCategory = 'lodging' | 'ticket'
+
+/**
+ * Affiliate ids injected into outbound partner URLs, configured from the admin
+ * console. The query-parameter each maps to is decided here (the backend only
+ * stores the values). Blank = not configured → that param is omitted.
+ */
+export type AffiliateConfig = {
+  booking: { aid: string }
+  trip: { allianceid: string; sid: string }
+  klook: { aid: string }
+  kkday: { cid: string }
+}
+
+let configCache: AffiliateConfig | null = null
+let configPromise: Promise<AffiliateConfig | null> | null = null
+
+/** Fetch the public affiliate ids once and memoize; never throws. */
+export function fetchAffiliateConfig(): Promise<AffiliateConfig | null> {
+  if (configCache) return Promise.resolve(configCache)
+  if (!configPromise) {
+    configPromise = fetch(`${apiBaseUrl()}/affiliate/config`)
+      .then((res) => (res.ok ? (res.json() as Promise<AffiliateConfig>) : null))
+      .then((cfg) => {
+        if (cfg) configCache = cfg
+        return cfg
+      })
+      .catch(() => null)
+  }
+  return configPromise
+}
+
+/**
+ * Affiliate ids for the itinerary link builders. Starts null so the first
+ * client render matches the server (no hydration mismatch), then fills in after
+ * the fetch — the CTA hrefs gain their ids before the user can click.
+ */
+export function useAffiliateConfig(): AffiliateConfig | null {
+  const [config, setConfig] = useState<AffiliateConfig | null>(null)
+  useEffect(() => {
+    let active = true
+    void fetchAffiliateConfig().then((cfg) => {
+      if (active && cfg) setConfig(cfg)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
+  return config
+}
 
 export type AffiliateLink = {
   partner: AffiliatePartner
@@ -61,6 +111,7 @@ export function lodgingSearchLinks(
   destination: string,
   area: string,
   coords?: { latitude: number; longitude: number } | null,
+  config?: AffiliateConfig | null,
 ): AffiliateLink[] {
   const dest = destination.trim()
   const spot = cleanLocation(area)
@@ -78,10 +129,13 @@ export function lodgingSearchLinks(
     bookingParams.set('longitude', String(lng))
     bookingParams.set('radius', String(LODGING_RADIUS_KM))
   }
+  if (config?.booking.aid) bookingParams.set('aid', config.booking.aid)
 
   // Trip.com's Traditional-Chinese site (tw.) carries the keyword search;
   // it resolves the location itself, so no lat/lng is needed.
   const tripParams = new URLSearchParams({ keyword: query })
+  if (config?.trip.allianceid) tripParams.set('Allianceid', config.trip.allianceid)
+  if (config?.trip.sid) tripParams.set('SID', config.trip.sid)
 
   return [
     {
@@ -111,6 +165,7 @@ export function lodgingSearchLinks(
 export function ticketSearchLinks(
   destination: string,
   attractionName?: string | null,
+  config?: AffiliateConfig | null,
 ): { primary: AffiliateLink[]; fallback: AffiliateLink[] } {
   const dest = destination.trim()
   const spot = (attractionName ?? '').trim()
@@ -119,29 +174,33 @@ export function ticketSearchLinks(
   const fallbackQuery = dest || spot
 
   const primary = spot
-    ? [klookSearch(primaryQuery), kkdaySearch(primaryQuery)]
+    ? [klookSearch(primaryQuery, config), kkdaySearch(primaryQuery, config)]
     : []
 
   const fallback = fallbackQuery
-    ? [klookSearch(fallbackQuery), kkdaySearch(fallbackQuery)]
+    ? [klookSearch(fallbackQuery, config), kkdaySearch(fallbackQuery, config)]
     : []
 
   return { primary, fallback }
 }
 
-function klookSearch(query: string): AffiliateLink {
+function klookSearch(query: string, config?: AffiliateConfig | null): AffiliateLink {
+  const params = new URLSearchParams({ query })
+  if (config?.klook.aid) params.set('aid', config.klook.aid)
   return {
     partner: 'klook',
     label: 'Klook',
-    url: `https://www.klook.com/zh-TW/search/?query=${encodeURIComponent(query)}`,
+    url: `https://www.klook.com/zh-TW/search/?${params}`,
   }
 }
 
-function kkdaySearch(query: string): AffiliateLink {
+function kkdaySearch(query: string, config?: AffiliateConfig | null): AffiliateLink {
+  const params = new URLSearchParams({ keyword: query })
+  if (config?.kkday.cid) params.set('cid', config.kkday.cid)
   return {
     partner: 'kkday',
     label: 'KKday',
-    url: `https://www.kkday.com/zh-tw/product/productlist?keyword=${encodeURIComponent(query)}`,
+    url: `https://www.kkday.com/zh-tw/product/productlist?${params}`,
   }
 }
 
