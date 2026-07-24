@@ -142,6 +142,11 @@ server routes that forward to the backend with an `x-admin-key` header, so the s
 secret also never leaves the server. The backend guards `/settings` with the same header
 and fails closed when `ADMIN_PASSWORD` is unset.
 
+Job debugging lives at `/admin/jobs/[id]`: traveller preferences (when set), a link that
+opens the public `/trip/[jobId]` page, the job-level failure message, and per-document
+crawl errors (stored on `TripDocument.error` for crawls run after that column was added;
+older failed rows show status only).
+
 Seeded settings:
 
 | Key | Default | Purpose |
