@@ -434,6 +434,33 @@ export function setHostOverride(
 }
 
 // ---------------------------------------------------------------------------
+// LLM usage / cost analytics
+// ---------------------------------------------------------------------------
+
+export type LlmUsageBucket = {
+  calls: number
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  thinkingTokens: number
+  /** Null when the model is missing from the backend pricing table. */
+  estimatedCostUsd: number | null
+}
+
+export type LlmUsageAnalytics = {
+  totals: LlmUsageBucket
+  byModel: Array<LlmUsageBucket & { provider: string; model: string }>
+  daily: Array<LlmUsageBucket & { day: string }>
+}
+
+export function getLlmUsage(days = 30) {
+  return request<LlmUsageAnalytics>(
+    `/api/admin/ops/analytics/llm-usage?days=${days}`,
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Affiliate funnel analytics
 // ---------------------------------------------------------------------------
 

@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Added LLM token usage tracking: every Anthropic/Gemini call records its billed tokens (input, output, cache read/write, thinking) to a new `LlmUsage` table, captured fire-and-forget so bookkeeping can never fail the call itself. Admin gains `GET /ops/analytics/llm-usage` (daily + per-model rollups with list-price cost estimates) and an `/admin/llm-usage` page with stat cards, a daily token chart, and a per-model breakdown.
 - Added an admin **Dashboard** at `/admin` (no longer redirects away): overview cards and sections for stuck jobs, high-failure keywords, affiliate CTR, and storage usage, composed from existing ops APIs (`/ops/jobs/stats`, `/ops/analytics/keywords`, `/ops/analytics/affiliate`, `/ops/retention`). System health remains at `/admin/health`.
 - Added manual source-host allow/deny lists on `/admin/keywords` (Source hosts tab): operators can temporarily unblock an auto-blocked site or force-skip a junk domain. Lists persist as `trip.hostAllowlist` / `trip.hostDenylist` settings and are applied at crawl URL selection (allow overrides static + auto blocks; deny always skips). APIs: `GET/PUT /ops/hosts/policy`, `PUT /ops/hosts/override`.
 - Added an admin system health panel at `/admin/health` (`GET /ops/health`) that surfaces database connectivity, Playwright/search browser readiness, Gemini/Anthropic API key presence, live queue running/queued counts, and last-24h job success rate for triage when jobs fail at scale.

@@ -303,6 +303,7 @@ export const en: Dictionary = {
       jobs: 'Jobs',
       keywords: 'Keywords',
       affiliate: 'Affiliate funnel',
+      llmUsage: 'LLM usage',
       prompts: 'Prompts',
       settings: 'Settings',
     },
@@ -673,6 +674,35 @@ export const en: Dictionary = {
       colPartner: 'Partner',
       colCategory: 'Category',
       ctr: 'CTR',
+    },
+
+    llmUsage: {
+      title: 'LLM usage',
+      subtitle: 'Daily token burn and estimated cost of Claude / Gemini calls',
+      stat: {
+        calls: 'API calls',
+        inputTokens: 'Input tokens',
+        outputTokens: 'Output tokens',
+        estimatedCost: 'Estimated cost',
+        estimatedCostHint: 'List-price estimate; models without pricing data excluded',
+      },
+      chartTitle: 'Daily tokens',
+      chartInput: 'Input (incl. cache)',
+      chartOutput: 'Output (incl. thinking)',
+      chartEmpty: 'No LLM calls in this range',
+      chartTooltip: '{date}: {input} input / {output} output tokens, ≈ {cost}',
+      byModelTitle: 'By model',
+      col: {
+        model: 'Model',
+        calls: 'Calls',
+        input: 'Input',
+        output: 'Output',
+        cacheRead: 'Cache read',
+        thinking: 'Thinking',
+        cost: 'Est. cost',
+      },
+      empty: 'No usage recorded yet — token logging starts with this release',
+      unknownPrice: 'No pricing data',
     },
 
     pipeline: {

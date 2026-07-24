@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   Activity,
+  Coins,
   Home,
   LayoutDashboard,
   ListChecks,
@@ -25,6 +26,7 @@ const NAV_ITEMS = [
   { href: '/admin/jobs', key: 'jobs', icon: ListChecks },
   { href: '/admin/keywords', key: 'keywords', icon: TrendingUp },
   { href: '/admin/affiliate', key: 'affiliate', icon: ShoppingBag },
+  { href: '/admin/llm-usage', key: 'llmUsage', icon: Coins },
   { href: '/admin/prompts', key: 'prompts', icon: MessageSquareText },
   { href: '/admin/settings', key: 'settings', icon: Settings },
 ] as const

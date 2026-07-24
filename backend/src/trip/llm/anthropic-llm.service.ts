@@ -2,12 +2,15 @@ import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { Injectable } from '@nestjs/common';
 import * as z from 'zod/v4';
+import { LlmUsageService } from './llm-usage.service';
 import { LlmRequest } from './llm.types';
 
 @Injectable()
 export class AnthropicLlmService {
   readonly provider = 'anthropic';
   private cached?: Anthropic;
+
+  constructor(private readonly usage: LlmUsageService) {}
 
   async generate<T extends z.ZodType>(
     model: string,
@@ -34,6 +37,18 @@ export class AnthropicLlmService {
           })),
         },
       ],
+    });
+
+    // Record before the parse check: the tokens are billed either way.
+    // Anthropic's input_tokens already excludes cache reads/writes, and
+    // thinking tokens are folded into output_tokens.
+    this.usage.record({
+      provider: this.provider,
+      model,
+      inputTokens: message.usage.input_tokens,
+      outputTokens: message.usage.output_tokens,
+      cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
+      cacheWriteTokens: message.usage.cache_creation_input_tokens ?? 0,
     });
 
     const parsed = message.parsed_output;

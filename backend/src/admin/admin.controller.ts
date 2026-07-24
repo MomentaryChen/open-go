@@ -77,7 +77,9 @@ export class AdminController {
   failStuck(@Body() body?: { olderThanMinutes?: number }) {
     const minutes = body?.olderThanMinutes ?? DEFAULT_STUCK_MINUTES;
     if (!Number.isFinite(minutes) || minutes < 1 || minutes > 1440) {
-      throw new BadRequestException('olderThanMinutes must be between 1 and 1440');
+      throw new BadRequestException(
+        'olderThanMinutes must be between 1 and 1440',
+      );
     }
     return this.jobs.failStuck(Math.floor(minutes));
   }
@@ -89,7 +91,11 @@ export class AdminController {
   @Post('jobs/batch-retry')
   batchRetry(
     @Body()
-    body?: { status?: string; keyword?: string; limit?: number },
+    body?: {
+      status?: string;
+      keyword?: string;
+      limit?: number;
+    },
   ) {
     return this.jobs.batchRetry({
       status: body?.status?.trim() || undefined,
@@ -102,7 +108,11 @@ export class AdminController {
   @Post('jobs/batch-delete')
   batchDelete(
     @Body()
-    body?: { status?: string; keyword?: string; limit?: number },
+    body?: {
+      status?: string;
+      keyword?: string;
+      limit?: number;
+    },
   ) {
     return this.jobs.batchDelete({
       status: body?.status?.trim() || undefined,
@@ -178,6 +188,11 @@ export class AdminController {
       this.parseInt(days, 30, 1, 365),
       this.parseInt(limit, 30, 1, 200),
     );
+  }
+
+  @Get('analytics/llm-usage')
+  llmUsage(@Query('days') days?: string) {
+    return this.analytics.llmUsage(this.parseInt(days, 30, 1, 365));
   }
 
   /** Manual allow / deny lists used by crawl URL selection. */
