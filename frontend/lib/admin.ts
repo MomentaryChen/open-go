@@ -333,9 +333,26 @@ export type HostStat = {
   autoBlocked: boolean
 }
 
+export type FailureReason = {
+  error: string
+  count: number
+  share: number
+}
+
+export type FailureReasons = {
+  totalFailed: number
+  reasons: FailureReason[]
+}
+
 export function getKeywordStats(days = 30, limit = 50) {
   return request<KeywordStat[]>(
     `/api/admin/ops/analytics/keywords?days=${days}&limit=${limit}`,
+  )
+}
+
+export function getFailureReasons(days = 30, limit = 10) {
+  return request<FailureReasons>(
+    `/api/admin/ops/analytics/failure-reasons?days=${days}&limit=${limit}`,
   )
 }
 

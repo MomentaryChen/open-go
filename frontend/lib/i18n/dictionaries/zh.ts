@@ -459,6 +459,12 @@ export const zh = {
       chartFailed: '失敗',
       chartEmpty: '此區間沒有資料',
       chartTooltip: '{date}\n總計 {total} · 成功 {done} · 失敗 {failed}',
+      reasonsTitle: '失敗原因 Top-N',
+      reasonsIntro:
+        '依 TripJob.error 原文分群（搜尋被擋、抓取為空、LLM timeout 等），不另建錯誤分類表。',
+      reasonsEmpty: '此區間沒有帶錯誤訊息的失敗任務',
+      reasonsTotal: '共 {n} 筆帶錯誤訊息的失敗任務',
+      reasonsCol: { error: '錯誤訊息', count: '次數', share: '占比' },
     },
 
     prompts: {
