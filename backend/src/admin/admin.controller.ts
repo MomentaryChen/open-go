@@ -87,6 +87,14 @@ export class AdminController {
     );
   }
 
+  @Get('analytics/failure-reasons')
+  failureReasons(@Query('days') days?: string, @Query('limit') limit?: string) {
+    return this.analytics.failureReasons(
+      this.parseInt(days, 30, 1, 365),
+      this.parseInt(limit, 10, 1, 50),
+    );
+  }
+
   @Get('analytics/trend')
   trend(@Query('days') days?: string) {
     return this.analytics.trend(this.parseInt(days, 30, 1, 365));

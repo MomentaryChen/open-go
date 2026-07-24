@@ -140,6 +140,10 @@ server routes that forward to the backend with an `x-admin-key` header, so the s
 secret also never leaves the server. The backend guards `/settings` with the same header
 and fails closed when `ADMIN_PASSWORD` is unset.
 
+Keyword analytics at `/admin/keywords` shows demand, failure rate, content gaps, crawl-host
+health, and a top-N failure-reason panel grouped from existing `TripJob.error` text
+(`GET /ops/analytics/failure-reasons`) — no separate error-code table.
+
 Seeded settings:
 
 | Key | Default | Purpose |
