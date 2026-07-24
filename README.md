@@ -87,6 +87,7 @@ pnpm dev:frontend
 - `GET /trips/:id/documents` (crawled source documents)
 - `POST /affiliate/events` (public CTA funnel ingest: impression / click / redirect)
 - `GET/POST /settings`, `GET/PATCH/DELETE /settings/:key` (admin-only, `x-admin-key` header)
+- `GET /ops/health` (admin-only system health: DB, browsers, LLM keys, queue, 24h success rate)
 
 ## AI trip planning
 
@@ -132,6 +133,11 @@ without a restart; changes are logged as `Trip LLM: provider=… model=…`.
 DB `Setting` table with full CRUD. Values in the DB take precedence over environment
 variables and apply to the **next job without a restart** (reads go through a 30s cache
 that is invalidated on every write).
+
+Opening `/admin` lands on **System health** (`/admin/health`, `GET /ops/health`): database
+latency, Playwright search/crawl browser readiness (including a cached Chromium probe),
+Gemini/Anthropic API key presence for the active provider, live queue `running`/`queued`
+counts, and last-24h job success rate. Use this first when jobs fail at scale.
 
 Auth is deliberately lightweight: `ADMIN_PASSWORD` is checked by a login form which sets an
 httpOnly cookie (a salted SHA-256 digest — the plaintext never reaches the browser);

@@ -292,6 +292,7 @@ export const en: Dictionary = {
     brand: 'Travel Discovery',
     sidebarTitle: 'Admin',
     nav: {
+      health: 'Health',
       jobs: 'Jobs',
       keywords: 'Keywords',
       affiliate: 'Affiliate funnel',
@@ -636,6 +637,51 @@ export const en: Dictionary = {
       confirmRun: 'Run cleanup',
       cleaned: 'Cleanup complete',
       cleanedDesc: 'Stripped {content} contents, deleted {jobs} jobs, {cache} expired cache entries',
+    },
+
+    health: {
+      title: 'System health',
+      subtitle:
+        'First stop when jobs fail at scale: database, browsers, LLM keys, queue, and last-24h success rate',
+      overall: 'Overall',
+      checkedAt: 'Checked at {time}',
+      status: {
+        ok: 'OK',
+        warn: 'Warning',
+        error: 'Error',
+      },
+      database: {
+        title: 'Database',
+        latency: 'Latency {ms} ms',
+      },
+      browsers: {
+        title: 'Playwright / search browser',
+        search: 'Search browser',
+        crawl: 'Crawl fallback browser',
+        chromium: 'Chromium',
+        enabled: 'Enabled',
+        disabled: 'Disabled',
+        launched: 'Running',
+        idle: 'Not started',
+        available: 'Available {version}',
+        unavailable: 'Unavailable',
+      },
+      llm: {
+        title: 'LLM API keys',
+        active: 'Active: {provider} · {model}',
+        configured: 'Configured',
+        missing: 'Missing',
+      },
+      queue: {
+        title: 'Queue',
+        running: 'Running',
+        queued: 'Queued',
+      },
+      last24h: {
+        title: 'Success rate (24h)',
+        doneFailed: 'Done {done} · Failed {failed}',
+        noFinished: 'No finished jobs yet',
+      },
     },
   },
 }

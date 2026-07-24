@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- Added an admin system health panel at `/admin/health` (`GET /ops/health`) that surfaces database connectivity, Playwright/search browser readiness, Gemini/Anthropic API key presence, live queue running/queued counts, and last-24h job success rate for triage when jobs fail at scale.
+
 ### Fixed
 - Fixed admin keyword analytics (`/admin/keywords`) failing to load: the host stats query joined `TripDocument` and `TripJob` without qualifying `status` / `url`, so PostgreSQL rejected the ambiguous column reference and the page's parallel fetch aborted.
 

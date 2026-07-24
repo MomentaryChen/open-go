@@ -15,6 +15,7 @@ import type { AffiliateConfigInput } from '../affiliate/affiliate-config.service
 import { RetentionService } from '../retention/retention.service';
 import { AdminGuard } from '../settings/admin.guard';
 import { AdminAnalyticsService } from './admin-analytics.service';
+import { AdminHealthService } from './admin-health.service';
 import { AdminJobsService } from './admin-jobs.service';
 
 /** A job with no progress for this long is treated as stranded by a restart. */
@@ -28,9 +29,19 @@ export class AdminController {
   constructor(
     private readonly jobs: AdminJobsService,
     private readonly analytics: AdminAnalyticsService,
+    private readonly health: AdminHealthService,
     private readonly retention: RetentionService,
     private readonly affiliateConfig: AffiliateConfigService,
   ) {}
+
+  /**
+   * One-glance system health: DB, Playwright browsers, LLM keys, queue depth,
+   * and last-24h job success rate. First stop when jobs fail at scale.
+   */
+  @Get('health')
+  systemHealth() {
+    return this.health.check();
+  }
 
   @Get('jobs')
   listJobs(
