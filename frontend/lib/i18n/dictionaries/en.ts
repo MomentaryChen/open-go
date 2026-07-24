@@ -81,6 +81,15 @@ export const en: Dictionary = {
       'Lost connection to the server. The itinerary may still be generating — resume it later from “Recent searches”.',
     createJobFailed: 'Failed to create job ({status})',
     readCacheFailed: 'Failed to read the cached result',
+    keywordError: {
+      KEYWORD_TOO_SHORT: 'Please enter at least 2 characters',
+      KEYWORD_TOO_LONG: 'Keyword must be 200 characters or fewer',
+      KEYWORD_HAS_URL: 'Please enter a travel destination, not a URL',
+      KEYWORD_HAS_HTML: 'Keyword contains invalid HTML content',
+      KEYWORD_NO_WORDS: 'Please enter a keyword with actual text',
+      KEYWORD_CONTROL_CHARS: 'Keyword contains invalid characters',
+      KEYWORD_EXCESSIVE_SPECIAL: 'Too many special characters — please enter a normal travel keyword',
+    },
   },
 
   tripProgress: {
