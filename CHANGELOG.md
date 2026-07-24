@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- Added filter-based batch retry/delete on the admin Jobs page (`POST /ops/jobs/batch-retry`, `POST /ops/jobs/batch-delete`): after setting a status and/or keyword filter (e.g. all `failed` after a search outage), retry or delete up to 100 matching jobs in one confirmation instead of clicking row by row.
+- Enriched admin job detail (`/admin/jobs/[id]`): shows traveller preferences, a one-click link to the public `/trip/[jobId]` page, and per-document crawl failure reasons (persisted on `TripDocument.error` for new crawls).
+- Added a Pipeline tuning card on `/admin/settings` (alongside the LLM card) for `trip.targetDocuments`, `trip.crawlConcurrency`, `trip.cacheTtlDays`, `trip.resultsPerQuery`, `trip.maxDocumentsPerHost`, and `trip.maxConcurrentJobs`, so operators can edit these runtime knobs without hunting the KV table.
+
 ### Fixed
 - Fixed admin sidebar bottom buttons (language toggle, back-to-site, logout) being pushed off-screen when main content is tall; the sidebar is now sticky with a viewport-height constraint.
 - Fixed admin keyword analytics (`/admin/keywords`) failing to load: the host stats query joined `TripDocument` and `TripJob` without qualifying `status` / `url`, so PostgreSQL rejected the ambiguous column reference and the page's parallel fetch aborted.
