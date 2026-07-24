@@ -487,6 +487,12 @@ export const en: Dictionary = {
       chartFailed: 'Failed',
       chartEmpty: 'No data in this range',
       chartTooltip: '{date}\nTotal {total} · Done {done} · Failed {failed}',
+      reasonsTitle: 'Top failure reasons',
+      reasonsIntro:
+        'Grouped by the exact TripJob.error message (search blocked, empty crawl, LLM timeout, …). No separate error taxonomy.',
+      reasonsEmpty: 'No failed jobs with an error message in this range',
+      reasonsTotal: '{n} failed jobs with an error message',
+      reasonsCol: { error: 'Error', count: 'Count', share: 'Share' },
     },
 
     prompts: {

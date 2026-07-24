@@ -152,6 +152,10 @@ server routes that forward to the backend with an `x-admin-key` header, so the s
 secret also never leaves the server. The backend guards `/settings` with the same header
 and fails closed when `ADMIN_PASSWORD` is unset.
 
+Keyword analytics at `/admin/keywords` shows demand, failure rate, content gaps, crawl-host
+health, and a top-N failure-reason panel grouped from existing `TripJob.error` text
+(`GET /ops/analytics/failure-reasons`) — no separate error-code table.
+
 Job debugging lives at `/admin/jobs/[id]`: traveller preferences (when set), a link that
 opens the public `/trip/[jobId]` page, the job-level failure message, and per-document
 crawl errors (stored on `TripDocument.error` for crawls run after that column was added;
