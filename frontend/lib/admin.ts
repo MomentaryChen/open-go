@@ -178,12 +178,25 @@ export type JobDocument = {
   title: string | null
   snippet: string | null
   status: string
+  /** Crawl failure reason when status is `failed`; null for older rows. */
+  error: string | null
   fetchedAt: string | null
+}
+
+export type JobPreferences = {
+  durationDays: number | null
+  companions: string | null
+  pace: string | null
+  budget: string | null
+  mustVisit: string[]
+  avoid: string[]
 }
 
 export type JobDetail = {
   id: string
   keyword: string
+  /** Structured traveller preferences; null for keyword-only / legacy jobs. */
+  preferences: JobPreferences | null
   status: string
   progress: number
   message: string | null
@@ -250,6 +263,37 @@ export function failStuckJobs(olderThanMinutes: number) {
     '/api/admin/ops/jobs/fail-stuck',
     { method: 'POST', body: JSON.stringify({ olderThanMinutes }) },
   )
+}
+
+export type JobBatchFilter = {
+  status?: string
+  keyword?: string
+  limit?: number
+}
+
+export function batchRetryJobs(filter: JobBatchFilter) {
+  return request<{
+    matched: number
+    retried: number
+    truncated: boolean
+    limit: number
+    jobs: Array<{ sourceId: string; jobId: string; keyword: string }>
+  }>('/api/admin/ops/jobs/batch-retry', {
+    method: 'POST',
+    body: JSON.stringify(filter),
+  })
+}
+
+export function batchDeleteJobs(filter: JobBatchFilter) {
+  return request<{
+    matched: number
+    deleted: number
+    truncated: boolean
+    limit: number
+  }>('/api/admin/ops/jobs/batch-delete', {
+    method: 'POST',
+    body: JSON.stringify(filter),
+  })
 }
 
 // ---------------------------------------------------------------------------

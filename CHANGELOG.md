@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - Added manual source-host allow/deny lists on `/admin/keywords` (Source hosts tab): operators can temporarily unblock an auto-blocked site or force-skip a junk domain. Lists persist as `trip.hostAllowlist` / `trip.hostDenylist` settings and are applied at crawl URL selection (allow overrides static + auto blocks; deny always skips). APIs: `GET/PUT /ops/hosts/policy`, `PUT /ops/hosts/override`.
+- Added filter-based batch retry/delete on the admin Jobs page (`POST /ops/jobs/batch-retry`, `POST /ops/jobs/batch-delete`): after setting a status and/or keyword filter (e.g. all `failed` after a search outage), retry or delete up to 100 matching jobs in one confirmation instead of clicking row by row.
+- Enriched admin job detail (`/admin/jobs/[id]`): shows traveller preferences, a one-click link to the public `/trip/[jobId]` page, and per-document crawl failure reasons (persisted on `TripDocument.error` for new crawls).
+- Added a Pipeline tuning card on `/admin/settings` (alongside the LLM card) for `trip.targetDocuments`, `trip.crawlConcurrency`, `trip.cacheTtlDays`, `trip.resultsPerQuery`, `trip.maxDocumentsPerHost`, and `trip.maxConcurrentJobs`, so operators can edit these runtime knobs without hunting the KV table.
 
 ### Fixed
 - Fixed admin keyword analytics (`/admin/keywords`) failing to load: the host stats query joined `TripDocument` and `TripJob` without qualifying `status` / `url`, so PostgreSQL rejected the ambiguous column reference and the page's parallel fetch aborted.

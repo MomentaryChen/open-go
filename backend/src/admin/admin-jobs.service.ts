@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { TripQueueService } from '../trip/trip-queue.service';
@@ -14,11 +19,21 @@ const ACTIVE_STATUSES = [
   'composing',
 ];
 
+/** Cap for filter-matched batch retry/delete so a loose filter cannot flood the queue. */
+const BATCH_MAX = 100;
+
 export type JobListParams = {
   status?: string;
   keyword?: string;
   page: number;
   pageSize: number;
+};
+
+export type JobFilterParams = {
+  status?: string;
+  keyword?: string;
+  /** Max rows to act on; clamped to BATCH_MAX. */
+  limit?: number;
 };
 
 @Injectable()
@@ -31,12 +46,29 @@ export class AdminJobsService {
     private readonly queue: TripQueueService,
   ) {}
 
-  async list({ status, keyword, page, pageSize }: JobListParams) {
+  private buildWhere(status?: string, keyword?: string): Prisma.TripJobWhereInput {
     const where: Prisma.TripJobWhereInput = {};
     // "active" is a UI-level bucket covering every non-terminal status.
     if (status === 'active') where.status = { in: ACTIVE_STATUSES };
     else if (status) where.status = status;
     if (keyword) where.keyword = { contains: keyword, mode: 'insensitive' };
+    return where;
+  }
+
+  /**
+   * Batch ops must target a deliberate filter — never "everything" — so a
+   * misclick cannot wipe or re-queue the whole table.
+   */
+  private requireFilter(status?: string, keyword?: string) {
+    if (!status && !keyword) {
+      throw new BadRequestException(
+        'Batch actions require a status and/or keyword filter',
+      );
+    }
+  }
+
+  async list({ status, keyword, page, pageSize }: JobListParams) {
+    const where = this.buildWhere(status, keyword);
 
     const [total, rows] = await Promise.all([
       this.prisma.tripJob.count({ where }),
@@ -90,6 +122,7 @@ export class AdminJobsService {
             title: true,
             snippet: true,
             status: true,
+            error: true,
             fetchedAt: true,
           },
         },
@@ -135,6 +168,80 @@ export class AdminJobsService {
     if (!job) throw new NotFoundException(`Trip job ${jobId} not found`);
     await this.prisma.tripJob.delete({ where: { id: jobId } });
     return { ok: true };
+  }
+
+  /**
+   * Re-runs every job matching the current list filters (capped). Useful after
+   * an outage leaves a wave of failed jobs — filter to `failed` and retry once.
+   */
+  async batchRetry({ status, keyword, limit }: JobFilterParams) {
+    this.requireFilter(status, keyword);
+    const take = Math.min(Math.max(limit ?? BATCH_MAX, 1), BATCH_MAX);
+    const where = this.buildWhere(status, keyword);
+    const matched = await this.prisma.tripJob.count({ where });
+    const rows = await this.prisma.tripJob.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take,
+      select: { id: true, keyword: true, preferences: true },
+    });
+
+    const created: Array<{ sourceId: string; jobId: string; keyword: string }> =
+      [];
+    for (const row of rows) {
+      const { job } = await this.trips.createJob(
+        row.keyword,
+        normalizePreferences(row.preferences),
+        true,
+      );
+      created.push({
+        sourceId: row.id,
+        jobId: job.id,
+        keyword: job.keyword,
+      });
+    }
+
+    this.logger.log(
+      `Batch-retried ${created.length}/${matched} jobs (status=${status ?? '*'} keyword=${keyword ?? '*'})`,
+    );
+    return {
+      matched,
+      retried: created.length,
+      truncated: matched > created.length,
+      limit: take,
+      jobs: created,
+    };
+  }
+
+  /** Deletes every job matching the current list filters (capped). */
+  async batchDelete({ status, keyword, limit }: JobFilterParams) {
+    this.requireFilter(status, keyword);
+    const take = Math.min(Math.max(limit ?? BATCH_MAX, 1), BATCH_MAX);
+    const where = this.buildWhere(status, keyword);
+    const matched = await this.prisma.tripJob.count({ where });
+    const rows = await this.prisma.tripJob.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take,
+      select: { id: true },
+    });
+    const ids = rows.map((row) => row.id);
+    if (ids.length === 0) {
+      return { matched, deleted: 0, truncated: false, limit: take };
+    }
+
+    const result = await this.prisma.tripJob.deleteMany({
+      where: { id: { in: ids } },
+    });
+    this.logger.log(
+      `Batch-deleted ${result.count}/${matched} jobs (status=${status ?? '*'} keyword=${keyword ?? '*'})`,
+    );
+    return {
+      matched,
+      deleted: result.count,
+      truncated: matched > result.count,
+      limit: take,
+    };
   }
 
   /**
