@@ -18,11 +18,15 @@ import {
   Ticket,
   TrainFront,
   UtensilsCrossed,
+  Youtube,
   type LucideIcon,
 } from 'lucide-react'
 import { AffiliateCta } from '@/components/affiliate-cta'
+import { YouTubeVideoCard } from '@/components/youtube-video-card'
 import { Card } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { fmt } from '@/lib/i18n'
+import { useLanguage } from '@/lib/i18n/context'
 import {
   lodgingSearchLinks,
   shouldShowTicketCta,
@@ -55,47 +59,49 @@ function stayToNextDayKm(itinerary: Itinerary, dayIndex: number): number | null 
   )
 }
 
+/** Loading fallback for the lazily-imported map — needs the hook for its copy. */
+function MapLoading() {
+  const { t } = useLanguage()
+  return (
+    <div className="flex h-72 items-center justify-center rounded-xl border border-border bg-secondary/30 text-sm text-muted-foreground">
+      {t.itinerary.mapLoading}
+    </div>
+  )
+}
+
 // Leaflet touches `window`; keep it out of the server render.
 const ItineraryMap = dynamic(
   () => import('@/components/itinerary-map').then((module) => module.ItineraryMap),
   {
     ssr: false,
-    loading: () => (
-      <div className="flex h-72 items-center justify-center rounded-xl border border-border bg-secondary/30 text-sm text-muted-foreground">
-        地圖載入中…
-      </div>
-    ),
+    loading: () => <MapLoading />,
   },
 )
 
-const CATEGORY_META: Record<string, { label: string; icon: LucideIcon; className: string }> = {
+// Icon + color per category; the human label resolves via
+// `t.itinerary.categories[category]`.
+const CATEGORY_META: Record<string, { icon: LucideIcon; className: string }> = {
   attraction: {
-    label: '景點',
     icon: Camera,
     className: 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300',
   },
   food: {
-    label: '美食',
     icon: UtensilsCrossed,
     className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300',
   },
   shopping: {
-    label: '購物',
     icon: ShoppingBag,
     className: 'bg-pink-100 text-pink-700 dark:bg-pink-900/50 dark:text-pink-300',
   },
   transport: {
-    label: '交通',
     icon: TrainFront,
     className: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300',
   },
   hotel: {
-    label: '住宿',
     icon: BedDouble,
     className: 'bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300',
   },
   other: {
-    label: '其他',
     icon: MapPin,
     className: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
   },
@@ -115,7 +121,21 @@ export function ItineraryView({
   /** Trip job id for affiliate funnel events (Phase 0). */
   jobId?: string
 }) {
+  const { t, locale } = useLanguage()
   const affiliateConfig = useAffiliateConfig()
+  // No real video data exists (the crawler skips YouTube), so the Videos tab
+  // offers YouTube *searches* built from the trip: an overview, food, and one
+  // per day theme. The card falls back to a search link when it has no videoId.
+  const videoKeywords = [
+    fmt(t.itinerary.videoOverview, { destination: itinerary.destination }),
+    fmt(t.itinerary.videoFood, { destination: itinerary.destination }),
+    ...itinerary.days.map((day) =>
+      fmt(t.itinerary.videoDayTheme, {
+        destination: itinerary.destination,
+        theme: day.theme,
+      }),
+    ),
+  ]
   return (
     <div className="space-y-6">
       {/* Boarding-pass style cover */}
@@ -123,19 +143,25 @@ export function ItineraryView({
         <div className="bg-gradient-to-br from-primary via-primary/90 to-accent p-6 text-primary-foreground md:p-8">
           <div className="flex items-center gap-2 text-sm opacity-90">
             <Plane className="h-4 w-4" />
-            <span className="tracking-widest uppercase">Boarding Pass · 你的專屬旅程</span>
+            <span className="tracking-widest uppercase">{t.itinerary.boardingPass}</span>
           </div>
           <h2 className="mt-3 text-2xl font-bold md:text-3xl">{itinerary.title}</h2>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed opacity-90">{itinerary.summary}</p>
           <div className="mt-5 flex flex-wrap gap-2">
-            <CoverStat icon={CalendarDays} text={`${itinerary.destination} · ${itinerary.durationDays} 天`} />
-            <CoverStat icon={Sun} text={`最佳季節：${itinerary.bestSeason}`} />
-            <CoverStat icon={Coins} text={`預算：${itinerary.budgetEstimate}`} />
+            <CoverStat
+              icon={CalendarDays}
+              text={fmt(t.itinerary.destinationDays, {
+                destination: itinerary.destination,
+                days: itinerary.durationDays,
+              })}
+            />
+            <CoverStat icon={Sun} text={fmt(t.itinerary.bestSeason, { season: itinerary.bestSeason })} />
+            <CoverStat icon={Coins} text={fmt(t.itinerary.budget, { budget: itinerary.budgetEstimate })} />
           </div>
         </div>
         {/* perforation line, like a ticket stub */}
         <div className="border-t-2 border-dashed border-border bg-card px-6 py-3 text-xs text-muted-foreground">
-          由 AI 讀取 {itinerary.references.length} 個網路來源整理而成，每個行程都附出處
+          {fmt(t.itinerary.sourcesSummary, { count: itinerary.references.length })}
         </div>
       </Card>
 
@@ -143,11 +169,15 @@ export function ItineraryView({
         <TabsList>
           <TabsTrigger value="itinerary">
             <ListOrdered className="mr-1.5 h-4 w-4" />
-            行程
+            {t.itinerary.tabItinerary}
           </TabsTrigger>
           <TabsTrigger value="map">
             <MapIcon className="mr-1.5 h-4 w-4" />
-            地圖
+            {t.itinerary.tabMap}
+          </TabsTrigger>
+          <TabsTrigger value="videos">
+            <Youtube className="mr-1.5 h-4 w-4" />
+            {t.itinerary.tabVideos}
           </TabsTrigger>
         </TabsList>
 
@@ -185,7 +215,7 @@ export function ItineraryView({
                   <BedDouble className="mt-0.5 h-4 w-4 shrink-0 text-violet-600 dark:text-violet-300" />
                   <div className="text-sm">
                     <p className="font-medium text-foreground">
-                      今晚住宿區域：{day.stay.area}
+                      {fmt(t.itinerary.stayTonight, { area: day.stay.area })}
                     </p>
                     {day.stay.reason && (
                       <p className="mt-0.5 text-muted-foreground">{day.stay.reason}</p>
@@ -194,13 +224,16 @@ export function ItineraryView({
                       const km = stayToNextDayKm(itinerary, dayIndex)
                       return km !== null ? (
                         <p className="mt-0.5 text-violet-700 dark:text-violet-300">
-                          距 Day {day.day + 1} 出發點{formatDistance(km)}
+                          {fmt(t.itinerary.stayToNext, {
+                            next: day.day + 1,
+                            distance: formatDistance(km, locale),
+                          })}
                         </p>
                       ) : null
                     })()}
                     <div className="mt-2.5 flex flex-wrap items-center gap-2">
                       <span className="text-xs text-muted-foreground">
-                        搜尋此區飯店：
+                        {t.itinerary.searchHotels}
                       </span>
                       {lodgingSearchLinks(
                         itinerary.destination,
@@ -235,13 +268,27 @@ export function ItineraryView({
         <TabsContent value="map" className="mt-4">
           <ItineraryMap itinerary={itinerary} />
         </TabsContent>
+
+        <TabsContent value="videos" className="mt-4 space-y-4">
+          <p className="text-sm text-muted-foreground">{t.itinerary.videosIntro}</p>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {videoKeywords.map((keyword, index) => (
+              <YouTubeVideoCard
+                key={`${keyword}-${index}`}
+                keyword={keyword}
+                title={keyword}
+                index={index}
+              />
+            ))}
+          </div>
+        </TabsContent>
       </Tabs>
 
       {itinerary.tips.length > 0 && (
         <Card className="border-accent/30 bg-accent/5 p-6">
           <h3 className="inline-flex items-center gap-2 font-semibold text-foreground">
             <Lightbulb className="h-4 w-4 text-accent" />
-            旅遊提醒
+            {t.itinerary.tips}
           </h3>
           <ul className="mt-3 space-y-2">
             {itinerary.tips.map((tip, index) => (
@@ -256,7 +303,7 @@ export function ItineraryView({
 
       {itinerary.references.length > 0 && (
         <Card className="p-6">
-          <h3 className="font-semibold text-foreground">資料來源</h3>
+          <h3 className="font-semibold text-foreground">{t.itinerary.references}</h3>
           <ul className="mt-3 grid gap-2 sm:grid-cols-2">
             {itinerary.references.map((reference) => (
               <li key={reference.url}>
@@ -302,7 +349,11 @@ function TimelineItem({
   affiliateConfig: AffiliateConfig | null
   isLast: boolean
 }) {
+  const { t, locale } = useLanguage()
   const meta = CATEGORY_META[item.category] ?? CATEGORY_META.other
+  const categoryLabel =
+    (t.itinerary.categories as Record<string, string>)[item.category] ??
+    t.itinerary.categories.other
   // Transport rows ("從 A 搭車到 B") are not a single place, so a Maps pin would
   // point nowhere useful — everything else is a real spot worth reviews.
   const showMap = item.category !== 'transport'
@@ -335,21 +386,21 @@ function TimelineItem({
             {item.time}
           </span>
           <span className="font-medium text-foreground">{item.name}</span>
-          <span className={cn('rounded-full px-2 py-0.5 text-xs', meta.className)}>{meta.label}</span>
+          <span className={cn('rounded-full px-2 py-0.5 text-xs', meta.className)}>{categoryLabel}</span>
           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
             <Clock className="h-3 w-3" />
-            {item.durationMinutes} 分鐘
+            {fmt(t.itinerary.minutes, { n: item.durationMinutes })}
           </span>
           {showMap && (
             <a
-              href={mapsSearchUrl(item.name, item.address, destination)}
+              href={mapsSearchUrl(item.name, item.address, destination, locale)}
               target="_blank"
               rel="noreferrer noopener"
               className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
-              title={`在 Google 地圖查看「${item.name}」的評價`}
+              title={fmt(t.itinerary.mapReviewTitle, { name: item.name })}
             >
               <MapPin className="h-3 w-3" aria-hidden />
-              地圖評價
+              {t.itinerary.mapReview}
             </a>
           )}
         </div>
@@ -361,7 +412,7 @@ function TimelineItem({
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                   <Ticket className="h-3 w-3" aria-hidden />
-                  查門票：
+                  {t.itinerary.ticketsSearch}
                 </span>
                 {tickets.primary.map((link) => (
                   <AffiliateCta
@@ -380,8 +431,8 @@ function TimelineItem({
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs text-muted-foreground">
                   {tickets.primary.length > 0
-                    ? '或目的地熱門票券：'
-                    : '目的地熱門票券：'}
+                    ? t.itinerary.ticketsAlt
+                    : t.itinerary.ticketsFallback}
                 </span>
                 {tickets.fallback.map((link) => (
                   <AffiliateCta

@@ -13,7 +13,9 @@ import {
 } from 'lucide-react'
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
-import { TRIP_STAGES, type TripProgressEvent, type TripStatus } from '@/lib/trip'
+import { fmt } from '@/lib/i18n'
+import { useLanguage } from '@/lib/i18n/context'
+import { TRIP_STAGE_ORDER, type TripProgressEvent, type TripStatus } from '@/lib/trip'
 
 const STAGE_ORDER: TripStatus[] = ['pending', 'planning', 'searching', 'crawling', 'composing', 'done']
 
@@ -23,14 +25,6 @@ const STAGE_ICONS: Partial<Record<TripStatus, LucideIcon>> = {
   crawling: FileText,
   composing: Wand2,
   done: PartyPopper,
-}
-
-/** Rotating sub-messages that keep long stages feeling alive. */
-const STAGE_TICKER: Partial<Record<TripStatus, string[]>> = {
-  planning: ['AI 正在理解你的需求…', '拆解目的地、天數與旅遊風格…', '規劃搜尋策略…'],
-  searching: ['搜尋熱門遊記與攻略…', '比對多組關鍵字結果…', '挑選多元的資料來源…'],
-  crawling: ['正在閱讀部落客的遊記…', '擷取景點與美食資訊…', '整理交通與營業時間…', '過濾廣告與無效內容…'],
-  composing: ['AI 正在編排每日路線…', '平衡交通與停留時間…', '安排在地美食時段…', '為每個行程標註資料來源…'],
 }
 
 function stageState(stage: TripStatus, current: TripStatus) {
@@ -43,7 +37,10 @@ function stageState(stage: TripStatus, current: TripStatus) {
 }
 
 function StageTicker({ status }: { status: TripStatus }) {
-  const messages = STAGE_TICKER[status]
+  const { t } = useLanguage()
+  const messages = (
+    t.tripProgress.ticker as Partial<Record<TripStatus, string[]>>
+  )[status]
   const [index, setIndex] = useState(0)
 
   useEffect(() => {
@@ -67,6 +64,7 @@ function StageTicker({ status }: { status: TripStatus }) {
 }
 
 export function TripProgress({ event }: { event: TripProgressEvent }) {
+  const { t } = useLanguage()
   const failed = event.status === 'failed'
   const running = !failed && event.status !== 'done'
 
@@ -80,15 +78,18 @@ export function TripProgress({ event }: { event: TripProgressEvent }) {
       */}
       <p className="sr-only" role="status" aria-live="polite">
         {failed
-          ? `行程產生失敗：${event.error ?? '未知錯誤'}`
+          ? fmt(t.tripProgress.failedLive, { error: event.error ?? t.common.unknownError })
           : event.status === 'done'
-            ? '行程已完成'
-            : `${event.message ?? '處理中'}，進度 ${event.progress}%`}
+            ? t.tripProgress.doneLive
+            : fmt(t.tripProgress.progressLive, {
+                message: event.message ?? t.tripProgress.processingShort,
+                progress: event.progress,
+              })}
       </p>
 
       <div className="flex items-center justify-between mb-3">
         <p className={cn('text-sm font-medium', failed ? 'text-destructive' : 'text-foreground')}>
-          {failed ? (event.error ?? '行程產生失敗') : (event.message ?? '處理中…')}
+          {failed ? (event.error ?? t.tripProgress.failed) : (event.message ?? t.tripProgress.processing)}
         </p>
         <span className="text-sm text-muted-foreground tabular-nums">{event.progress}%</span>
       </div>
@@ -101,11 +102,11 @@ export function TripProgress({ event }: { event: TripProgressEvent }) {
       </div>
 
       <ol className="mt-6 grid gap-3 sm:grid-cols-5">
-        {TRIP_STAGES.map((stage) => {
-          const state = stageState(stage.status, event.status)
-          const Icon = STAGE_ICONS[stage.status]
+        {TRIP_STAGE_ORDER.map((status) => {
+          const state = stageState(status, event.status)
+          const Icon = STAGE_ICONS[status]
           return (
-            <li key={stage.status} className="flex items-center gap-2">
+            <li key={status} className="flex items-center gap-2">
               <span className="relative flex h-8 w-8 shrink-0 items-center justify-center">
                 {state === 'active' && (
                   <span className="absolute inset-0 rounded-full bg-primary/20 animate-ping [animation-duration:1.6s]" />
@@ -136,7 +137,7 @@ export function TripProgress({ event }: { event: TripProgressEvent }) {
                   state === 'idle' && 'text-muted-foreground',
                 )}
               >
-                {stage.label}
+                {t.tripStages[status]}
               </span>
             </li>
           )
@@ -156,7 +157,7 @@ export function TripProgress({ event }: { event: TripProgressEvent }) {
 
       {event.status === 'done' && (
         <p className="mt-4 text-center text-sm font-medium text-primary animate-in zoom-in fade-in duration-500">
-          🎉 行程完成，往下看你的專屬旅程！
+          {t.tripProgress.doneCheer}
         </p>
       )}
     </div>
@@ -176,6 +177,7 @@ const MAX_DOTS = 40
  * "is a number" narrowing alive inside the map callback.
  */
 function CrawlDots({ crawled, total }: { crawled: number; total: number }) {
+  const { t } = useLanguage()
   const shown = Math.min(Math.max(total, 0), MAX_DOTS)
   // Keep the fill proportional when the real total exceeds what is drawn.
   const filled = total > 0 ? Math.round((crawled / total) * shown) : 0
@@ -194,7 +196,7 @@ function CrawlDots({ crawled, total }: { crawled: number; total: number }) {
         ))}
       </span>
       <span className="ml-2 text-xs text-muted-foreground tabular-nums">
-        {crawled} / {total} 篇
+        {fmt(t.tripProgress.crawlDots, { crawled, total })}
       </span>
     </div>
   )

@@ -12,9 +12,11 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useLanguage } from '@/lib/i18n/context'
 import { adminLogin } from '@/lib/admin'
 
 export default function AdminLoginPage() {
+  const { t } = useLanguage()
   const router = useRouter()
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -39,13 +41,13 @@ export default function AdminLoginPage() {
     <div className="flex min-h-[80vh] items-center justify-center">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>管理後台登入</CardTitle>
-          <CardDescription>請輸入管理密碼以繼續</CardDescription>
+          <CardTitle>{t.admin.login.title}</CardTitle>
+          <CardDescription>{t.admin.login.description}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="admin-password">密碼</Label>
+              <Label htmlFor="admin-password">{t.admin.login.password}</Label>
               <Input
                 id="admin-password"
                 type="password"
@@ -57,7 +59,7 @@ export default function AdminLoginPage() {
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" className="w-full" disabled={submitting}>
-              {submitting ? '登入中…' : '登入'}
+              {submitting ? t.admin.login.submitting : t.admin.login.submit}
             </Button>
           </form>
         </CardContent>

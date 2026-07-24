@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Check, MessageCircle, Share2, Sparkles } from 'lucide-react'
 import { track } from '@vercel/analytics'
 import { Button } from '@/components/ui/button'
+import { useLanguage } from '@/lib/i18n/context'
 import { copyText } from '@/lib/clipboard'
 
 type ShareMethod = 'native' | 'line' | 'copy'
@@ -52,6 +53,7 @@ export function ShareActions({
    */
   path?: string
 }) {
+  const { t } = useLanguage()
   const [copied, setCopied] = useState(false)
   // Resolved in an effect so the server render (no `navigator`) matches the
   // first client render and hydration stays clean.
@@ -99,24 +101,24 @@ export function ShareActions({
         className="bg-[#06C755] text-white hover:bg-[#05b34c]"
       >
         <MessageCircle className="mr-1.5 h-4 w-4" />
-        LINE 傳給旅伴
+        {t.share.line}
       </Button>
       {canNativeShare && (
         <Button type="button" variant="outline" size="sm" onClick={() => void shareNative()}>
           <Share2 className="mr-1.5 h-4 w-4" />
-          分享…
+          {t.share.more}
         </Button>
       )}
       <Button type="button" variant="outline" size="sm" onClick={() => void copy()}>
         {copied ? (
           <>
             <Check className="mr-1.5 h-4 w-4" />
-            已複製連結
+            {t.share.copied}
           </>
         ) : (
           <>
             <Share2 className="mr-1.5 h-4 w-4" />
-            複製連結
+            {t.share.copy}
           </>
         )}
       </Button>
@@ -130,6 +132,7 @@ export function ShareActions({
  * right there and offer sharing once more.
  */
 export function ShareCta({ jobId, title }: { jobId: string; title: string }) {
+  const { t } = useLanguage()
   const onPlanClick = useCallback(() => {
     try {
       track('share_cta_click', { jobId })
@@ -140,9 +143,9 @@ export function ShareCta({ jobId, title }: { jobId: string; title: string }) {
 
   return (
     <section className="mt-12 rounded-2xl border border-primary/20 bg-card/70 p-8 text-center shadow-sm">
-      <h2 className="text-xl font-semibold">想去哪裡？換你了</h2>
+      <h2 className="text-xl font-semibold">{t.share.ctaHeading}</h2>
       <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-        輸入目的地和天數，AI 會替你讀完網路上的遊記，排出一份可以直接照著走的行程。
+        {t.share.ctaBody}
       </p>
       <div className="mt-5 flex flex-col items-center gap-4">
         <Link
@@ -151,10 +154,10 @@ export function ShareCta({ jobId, title }: { jobId: string; title: string }) {
           className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-medium text-primary-foreground shadow-sm transition-opacity hover:opacity-90"
         >
           <Sparkles className="h-4 w-4" />
-          免費規劃我的行程
+          {t.share.ctaButton}
         </Link>
         <div className="flex flex-col items-center gap-2">
-          <span className="text-xs text-muted-foreground">或把這份行程傳給同行的旅伴</span>
+          <span className="text-xs text-muted-foreground">{t.share.ctaFooter}</span>
           <ShareActions jobId={jobId} title={title} />
         </div>
       </div>

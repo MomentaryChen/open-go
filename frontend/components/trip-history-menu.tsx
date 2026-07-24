@@ -1,6 +1,8 @@
 'use client'
 
 import { Check, History, Share2, X } from 'lucide-react'
+import { fmt } from '@/lib/i18n'
+import { useLanguage } from '@/lib/i18n/context'
 import { timeAgo, type TripHistoryEntry } from '@/lib/trip-history'
 
 type Props = {
@@ -31,6 +33,7 @@ export function TripHistoryMenu({
   onRemove,
   onClearAll,
 }: Props) {
+  const { t, locale } = useLanguage()
   return (
     <div
       id="trip-history-menu"
@@ -42,14 +45,14 @@ export function TripHistoryMenu({
           className="flex items-center gap-2 text-xs font-medium text-muted-foreground"
         >
           <History className="h-3.5 w-3.5 text-primary" aria-hidden />
-          先前的查詢
+          {t.history.title}
         </div>
         <button
           type="button"
           className="text-xs text-muted-foreground hover:text-destructive"
           onClick={onClearAll}
         >
-          清除全部
+          {t.history.clearAll}
         </button>
       </div>
 
@@ -66,13 +69,13 @@ export function TripHistoryMenu({
               >
                 <span className="truncate text-foreground">{entry.keyword}</span>
                 <span className="shrink-0 text-xs text-muted-foreground">
-                  {unfinished ? '未完成' : timeAgo(entry.createdAt)}
+                  {unfinished ? t.history.unfinished : timeAgo(entry.createdAt, locale)}
                 </span>
               </button>
               <button
                 type="button"
-                aria-label={`分享 ${entry.keyword}`}
-                title={unfinished ? '尚未完成，還不能分享' : '複製分享連結'}
+                aria-label={fmt(t.history.share, { keyword: entry.keyword })}
+                title={unfinished ? t.history.shareDisabledTitle : t.history.shareTitle}
                 className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:text-primary disabled:opacity-30"
                 disabled={unfinished}
                 onClick={() => onShare(entry.jobId)}
@@ -85,7 +88,7 @@ export function TripHistoryMenu({
               </button>
               <button
                 type="button"
-                aria-label={`移除 ${entry.keyword}`}
+                aria-label={fmt(t.history.remove, { keyword: entry.keyword })}
                 className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:text-destructive"
                 onClick={() => onRemove(entry.jobId)}
               >

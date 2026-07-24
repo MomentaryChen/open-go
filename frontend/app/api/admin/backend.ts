@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { getDictionary } from '@/lib/i18n'
+import { getServerLocale } from '@/lib/i18n/server'
 import { serverApiBaseUrl } from '@/lib/server-api'
 
 /** Server-side base URL for the NestJS backend. See lib/server-api.ts. */
@@ -25,8 +27,9 @@ export async function forwardToBackend(
       cache: 'no-store',
     })
   } catch {
+    const e = getDictionary(await getServerLocale()).admin.apiErrors
     return NextResponse.json(
-      { message: '無法連線到後端服務' },
+      { message: e.backendUnreachable },
       { status: 502 },
     )
   }

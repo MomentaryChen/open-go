@@ -3,8 +3,11 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Sparkles } from 'lucide-react'
 import { ItineraryView } from '@/components/itinerary-view'
+import { LanguageToggle } from '@/components/language-toggle'
 import { ShareActions, ShareCta } from '@/components/share-actions'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { fmt } from '@/lib/i18n'
+import { getServerDictionary, getServerLocale } from '@/lib/i18n/server'
 import { getStoredTrip } from '@/lib/trip-server'
 
 type Params = { params: Promise<{ jobId: string }> }
@@ -19,17 +22,29 @@ function preview(text: string, max = 160) {
 // holds the link, so there is nothing to prerender at build time.
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { jobId } = await params
-  const trip = await getStoredTrip(jobId)
+  const [trip, t, locale] = await Promise.all([
+    getStoredTrip(jobId),
+    getServerDictionary(),
+    getServerLocale(),
+  ])
 
   if (!trip) {
-    return { title: '找不到這個行程 ｜ OpenGo', robots: { index: false } }
+    return { title: t.meta.tripNotFoundTitle, robots: { index: false } }
   }
 
   const { itinerary } = trip
-  const title = `${itinerary.title}｜${itinerary.destination} ${itinerary.durationDays} 天行程`
+  const title = fmt(t.meta.tripTitle, {
+    title: itinerary.title,
+    destination: itinerary.destination,
+    days: itinerary.durationDays,
+  })
   const description = preview(
     itinerary.summary ||
-      `AI 依據 ${itinerary.references.length} 篇網路遊記整理的 ${itinerary.destination} ${itinerary.durationDays} 天行程。`,
+      fmt(t.meta.tripDescription, {
+        sources: itinerary.references.length,
+        destination: itinerary.destination,
+        days: itinerary.durationDays,
+      }),
   )
 
   return {
@@ -44,7 +59,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       description,
       url: `/trip/${jobId}`,
       siteName: 'OpenGo',
-      locale: 'zh_TW',
+      locale: locale === 'en' ? 'en_US' : 'zh_TW',
     },
     // opengraph-image.tsx in this folder supplies the image; Next injects it
     // into openGraph.images and twitter.images automatically.
@@ -55,7 +70,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
 export default async function SharedTripPage({ params }: Params) {
   const { jobId } = await params
-  const trip = await getStoredTrip(jobId)
+  const [trip, t] = await Promise.all([getStoredTrip(jobId), getServerDictionary()])
   if (!trip) notFound()
 
   return (
@@ -67,17 +82,18 @@ export default async function SharedTripPage({ params }: Params) {
             className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-card/70 px-4 py-2 text-sm font-medium text-primary shadow-sm transition-colors hover:border-primary/40"
           >
             <Sparkles className="h-4 w-4" />
-            規劃我的行程
+            {t.nav.planMyTrip}
           </Link>
           <div className="flex items-center gap-2">
             <ShareActions jobId={jobId} title={trip.itinerary.title} />
+            <LanguageToggle />
             <ThemeToggle />
           </div>
         </div>
 
         {trip.keyword && (
           <p className="mt-6 text-sm text-muted-foreground">
-            這份行程來自關鍵字「{trip.keyword}」
+            {fmt(t.meta.fromKeyword, { keyword: trip.keyword })}
           </p>
         )}
 

@@ -14,6 +14,8 @@ import {
 import type { LatLngBoundsExpression } from 'leaflet'
 import { MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { fmt } from '@/lib/i18n'
+import { useLanguage } from '@/lib/i18n/context'
 import { distanceKm, formatDistance, type Itinerary } from '@/lib/trip'
 
 /** One color per day; wraps around for trips longer than the palette. */
@@ -62,6 +64,7 @@ function FitToBounds({ bounds }: { bounds: LatLngBoundsExpression }) {
  * judge distances and day layout, not for turn-by-turn navigation.
  */
 export function ItineraryMap({ itinerary }: { itinerary: Itinerary }) {
+  const { t, locale } = useLanguage()
   // Days a user has toggled off in the legend.
   const [hiddenDays, setHiddenDays] = useState<Set<number>>(new Set())
   const { resolvedTheme } = useTheme()
@@ -175,9 +178,9 @@ export function ItineraryMap({ itinerary }: { itinerary: Itinerary }) {
     return (
       <div className="flex h-72 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-secondary/30 text-center">
         <MapPin className="h-8 w-8 text-muted-foreground/50" />
-        <p className="text-sm font-medium text-foreground">此行程尚未包含座標資料</p>
+        <p className="text-sm font-medium text-foreground">{t.itineraryMap.noCoords}</p>
         <p className="max-w-sm text-xs text-muted-foreground">
-          這是地圖功能上線前產生的結果；按「重新產生」重新查詢後即可顯示路線地圖
+          {t.itineraryMap.noCoordsHint}
         </p>
       </div>
     )
@@ -212,9 +215,9 @@ export function ItineraryMap({ itinerary }: { itinerary: Itinerary }) {
               className="h-2.5 w-2.5 rounded-full"
               style={{ backgroundColor: colorOf(day) }}
             />
-            Day {day}
+            {fmt(t.itinerary.day, { n: day })}
             <span className="text-muted-foreground">
-              {stopsByDay.get(day)?.length} 站
+              {fmt(t.itineraryMap.dayStops, { n: stopsByDay.get(day)?.length ?? 0 })}
             </span>
           </button>
         ))}
@@ -241,13 +244,17 @@ export function ItineraryMap({ itinerary }: { itinerary: Itinerary }) {
                 pathOptions={{ color: '#94a3b8', weight: 2, opacity: 0.6, dashArray: '2 7' }}
               >
                 <Tooltip sticky>
-                  D{days[0]} 住宿 → D{days[1]} 出發：
-                  {formatDistance(
-                    distanceKm(
-                      { latitude: from[0], longitude: from[1] },
-                      { latitude: to[0], longitude: to[1] },
+                  {fmt(t.itineraryMap.transition, {
+                    from: days[0],
+                    to: days[1],
+                    distance: formatDistance(
+                      distanceKm(
+                        { latitude: from[0], longitude: from[1] },
+                        { latitude: to[0], longitude: to[1] },
+                      ),
+                      locale,
                     ),
-                  )}
+                  })}
                 </Tooltip>
               </Polyline>
             ))}
@@ -295,7 +302,9 @@ export function ItineraryMap({ itinerary }: { itinerary: Itinerary }) {
                       🏨
                     </Tooltip>
                     <Popup>
-                      <span className="text-sm font-medium">D{stay.day} 住宿區域</span>
+                      <span className="text-sm font-medium">
+                        {fmt(t.itineraryMap.stayTitle, { day: stay.day })}
+                      </span>
                       <br />
                       {stay.area}
                     </Popup>
@@ -326,7 +335,7 @@ export function ItineraryMap({ itinerary }: { itinerary: Itinerary }) {
                     </Tooltip>
                     <Popup>
                       <span className="text-sm font-medium">
-                        D{stop.day} · {stop.time}
+                        {fmt(t.itineraryMap.stopTitle, { day: stop.day, time: stop.time })}
                       </span>
                       <br />
                       {stop.name}
@@ -339,7 +348,7 @@ export function ItineraryMap({ itinerary }: { itinerary: Itinerary }) {
         </MapContainer>
 
         <div className="absolute bottom-3 left-3 z-[1000] rounded-lg border border-border bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow backdrop-blur">
-          位置為 AI 概略標註，僅供了解相對距離，非精確導航座標
+          {t.itineraryMap.approxNote}
         </div>
       </div>
     </div>

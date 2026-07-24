@@ -20,6 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { fmt } from '@/lib/i18n'
+import { useLanguage } from '@/lib/i18n/context'
 import {
   createSetting,
   getLlmProviders,
@@ -28,23 +30,21 @@ import {
   type Setting,
 } from '@/lib/admin'
 
-const PROVIDERS = [
-  { value: 'gemini', label: 'Gemini（Google）' },
-  { value: 'anthropic', label: 'Claude（Anthropic）' },
-] as const
+const PROVIDERS = ['gemini', 'anthropic'] as const
 
 const CUSTOM = '__custom__'
 
-/** Preset models per provider; "auto" resolves to the provider default. */
+// Preset models per provider; "auto" resolves to the provider default. The
+// "auto" label is localized at render time; the rest are literal model ids.
 const MODEL_PRESETS: Record<string, { value: string; label: string }[]> = {
   gemini: [
-    { value: 'auto', label: 'auto（提供者預設）' },
+    { value: 'auto', label: 'auto' },
     { value: 'gemini-flash-latest', label: 'gemini-flash-latest' },
     { value: 'gemini-3.5-flash-lite', label: 'gemini-3.5-flash-lite' },
     { value: 'gemini-3.1-flash-lite', label: 'gemini-3.1-flash-lite' },
   ],
   anthropic: [
-    { value: 'auto', label: 'auto（提供者預設）' },
+    { value: 'auto', label: 'auto' },
     { value: 'claude-opus-4-8', label: 'claude-opus-4-8' },
     { value: 'claude-sonnet-5', label: 'claude-sonnet-5' },
     { value: 'claude-haiku-4-5-20251001', label: 'claude-haiku-4-5' },
@@ -69,6 +69,9 @@ export function LlmSettingsCard({
   settings: Setting[]
   onSaved: () => Promise<void>
 }) {
+  const { t } = useLanguage()
+  const providerLabel = (value: string) =>
+    value === 'anthropic' ? t.admin.llm.providerClaude : t.admin.llm.providerGemini
   const providerSetting = settings.find((s) => s.key === 'trip.llmProvider')
   const modelSetting = settings.find((s) => s.key === 'trip.llmModel')
 
@@ -88,6 +91,8 @@ export function LlmSettingsCard({
   }, [])
 
   const presets = MODEL_PRESETS[provider] ?? [{ value: 'auto', label: 'auto' }]
+  const presetLabel = (value: string, label: string) =>
+    value === 'auto' ? t.admin.llm.autoPreset : label
 
   // Sync form with server values whenever a refresh lands. A stored model
   // that is not in the preset list shows up as the custom option.
@@ -110,7 +115,7 @@ export function LlmSettingsCard({
 
   const save = async () => {
     if (preset === CUSTOM && !customModel.trim()) {
-      toast.error('請輸入自訂模型名稱')
+      toast.error(t.admin.llm.enterCustom)
       return
     }
     setSaving(true)
@@ -129,15 +134,15 @@ export function LlmSettingsCard({
         providerSetting,
         'trip.llmProvider',
         provider,
-        'LLM 提供者：gemini 或 anthropic（需設定對應 API key）',
+        t.admin.llm.providerDesc,
       )
       await upsert(
         modelSetting,
         'trip.llmModel',
         model,
-        '模型名稱；auto = 依 provider 預設',
+        t.admin.llm.modelDesc,
       )
-      toast.success('LLM 設定已更新，下一個任務即會套用')
+      toast.success(t.admin.llm.updated)
       await onSaved()
     } catch (error) {
       toast.error((error as Error).message)
@@ -151,16 +156,16 @@ export function LlmSettingsCard({
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <Sparkles className="h-4 w-4" />
-          LLM 模型
+          {t.admin.llm.title}
         </CardTitle>
         <CardDescription>
-          行程產生使用的 LLM；儲存後下一個任務即生效，無需重啟
+          {t.admin.llm.description}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="flex flex-wrap items-end gap-4">
           <div className="space-y-2">
-            <Label>提供者</Label>
+            <Label>{t.admin.llm.provider}</Label>
             <Select
               value={provider}
               onValueChange={(value) => {
@@ -175,12 +180,12 @@ export function LlmSettingsCard({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {PROVIDERS.map(({ value, label }) => {
+                {PROVIDERS.map((value) => {
                   const hasKey = availability?.[value] ?? true
                   return (
                     <SelectItem key={value} value={value} disabled={!hasKey}>
-                      {label}
-                      {!hasKey && '（未設定 API key）'}
+                      {providerLabel(value)}
+                      {!hasKey && t.admin.llm.noApiKey}
                     </SelectItem>
                   )
                 })}
@@ -188,7 +193,7 @@ export function LlmSettingsCard({
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>模型</Label>
+            <Label>{t.admin.llm.model}</Label>
             <Select value={preset} onValueChange={setPreset}>
               <SelectTrigger className="w-64 font-mono text-sm">
                 <SelectValue />
@@ -196,35 +201,35 @@ export function LlmSettingsCard({
               <SelectContent>
                 {presets.map(({ value, label }) => (
                   <SelectItem key={value} value={value} className="font-mono">
-                    {label}
+                    {presetLabel(value, label)}
                   </SelectItem>
                 ))}
-                <SelectItem value={CUSTOM}>自訂…</SelectItem>
+                <SelectItem value={CUSTOM}>{t.admin.llm.custom}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           {preset === CUSTOM && (
             <div className="space-y-2">
-              <Label htmlFor="llm-custom-model">自訂模型名稱</Label>
+              <Label htmlFor="llm-custom-model">{t.admin.llm.customModel}</Label>
               <Input
                 id="llm-custom-model"
                 className="w-64 font-mono text-sm"
                 value={customModel}
-                placeholder="輸入模型名稱"
+                placeholder={t.admin.llm.modelPlaceholder}
                 onChange={(event) => setCustomModel(event.target.value)}
               />
             </div>
           )}
           <Button onClick={() => void save()} disabled={saving || !dirty}>
-            {saving ? '儲存中…' : '儲存'}
+            {saving ? t.common.saving : t.common.save}
           </Button>
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
-          auto = 使用提供者預設模型（目前為 {PROVIDER_DEFAULT[provider]}）
+          {fmt(t.admin.llm.autoHelp, { model: PROVIDER_DEFAULT[provider] })}
         </p>
         {availability && !availability[provider as keyof typeof availability] && (
           <p className="mt-1 text-xs text-destructive">
-            目前選擇的提供者尚未設定 API key，行程任務將會失敗
+            {t.admin.llm.noKeyWarning}
           </p>
         )}
       </CardContent>

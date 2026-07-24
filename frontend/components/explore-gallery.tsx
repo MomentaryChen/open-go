@@ -3,6 +3,8 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { CalendarDays, FileText, MapPin } from 'lucide-react'
+import { fmt } from '@/lib/i18n'
+import { useLanguage } from '@/lib/i18n/context'
 import { timeAgo } from '@/lib/trip-history'
 
 export type GalleryTrip = {
@@ -29,6 +31,7 @@ type Region = { key: string; label: string; count: number }
  * by how many trips they hold, so the busiest destinations lead.
  */
 export function ExploreGallery({ trips }: { trips: GalleryTrip[] }) {
+  const { t } = useLanguage()
   const [active, setActive] = useState<string>(ALL)
 
   const regions = useMemo<Region[]>(() => {
@@ -42,7 +45,7 @@ export function ExploreGallery({ trips }: { trips: GalleryTrip[] }) {
   }, [trips])
 
   const visible = useMemo(
-    () => (active === ALL ? trips : trips.filter((t) => t.destination === active)),
+    () => (active === ALL ? trips : trips.filter((item) => item.destination === active)),
     [trips, active],
   )
 
@@ -50,12 +53,12 @@ export function ExploreGallery({ trips }: { trips: GalleryTrip[] }) {
     return (
       <div className="mt-16 rounded-2xl border border-dashed border-border bg-card/50 px-6 py-16 text-center">
         <MapPin className="mx-auto h-8 w-8 text-muted-foreground/60" aria-hidden />
-        <p className="mt-4 text-muted-foreground">還沒有任何已完成的行程。</p>
+        <p className="mt-4 text-muted-foreground">{t.explore.empty}</p>
         <Link
           href="/"
           className="mt-4 inline-block text-sm font-medium text-primary hover:underline"
         >
-          去規劃第一個行程 →
+          {t.explore.emptyCta}
         </Link>
       </div>
     )
@@ -67,10 +70,10 @@ export function ExploreGallery({ trips }: { trips: GalleryTrip[] }) {
       <div
         className="flex flex-wrap gap-2"
         role="tablist"
-        aria-label="依區域篩選"
+        aria-label={t.explore.filterByRegion}
       >
         <TabButton
-          label="全部"
+          label={t.explore.all}
           count={trips.length}
           active={active === ALL}
           onClick={() => setActive(ALL)}
@@ -88,8 +91,8 @@ export function ExploreGallery({ trips }: { trips: GalleryTrip[] }) {
 
       <p className="mt-4 text-sm text-muted-foreground">
         {active === ALL
-          ? `共 ${trips.length} 個行程 · ${regions.length} 個地區`
-          : `${active} · ${visible.length} 個行程`}
+          ? fmt(t.explore.countLine, { trips: trips.length, regions: regions.length })
+          : fmt(t.explore.countActive, { active, count: visible.length })}
       </p>
 
       <ul className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -141,6 +144,7 @@ function TabButton({
 }
 
 function TripCard({ trip }: { trip: GalleryTrip }) {
+  const { t, locale } = useLanguage()
   return (
     <Link
       href={`/trip/${trip.jobId}`}
@@ -152,7 +156,7 @@ function TripCard({ trip }: { trip: GalleryTrip }) {
           {trip.destination}
         </span>
         <span className="shrink-0 text-xs text-muted-foreground">
-          {timeAgo(trip.createdAt)}
+          {timeAgo(trip.createdAt, locale)}
         </span>
       </div>
 
@@ -169,11 +173,11 @@ function TripCard({ trip }: { trip: GalleryTrip }) {
       <div className="mt-auto flex items-center gap-4 pt-4 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-1">
           <CalendarDays className="h-3.5 w-3.5" aria-hidden />
-          {trip.durationDays} 天
+          {fmt(t.explore.days, { n: trip.durationDays })}
         </span>
         <span className="inline-flex items-center gap-1">
           <FileText className="h-3.5 w-3.5" aria-hidden />
-          {trip.sourceCount} 篇來源
+          {fmt(t.explore.sources, { n: trip.sourceCount })}
         </span>
       </div>
     </Link>

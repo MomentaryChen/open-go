@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
 import { Moon, Sun } from 'lucide-react'
+import { useLanguage } from '@/lib/i18n/context'
 
 /**
  * Light/dark switch. The resolved theme is only known in the browser, so the
@@ -11,6 +12,7 @@ import { Moon, Sun } from 'lucide-react'
  */
 export function ThemeToggle({ className }: { className?: string }) {
   const { resolvedTheme, setTheme } = useTheme()
+  const { t } = useLanguage()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => setMounted(true), [])
@@ -20,8 +22,8 @@ export function ThemeToggle({ className }: { className?: string }) {
   return (
     <button
       type="button"
-      aria-label={isDark ? '切換至淺色模式' : '切換至深色模式'}
-      title={isDark ? '淺色模式' : '深色模式'}
+      aria-label={isDark ? t.theme.toLight : t.theme.toDark}
+      title={isDark ? t.theme.light : t.theme.dark}
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
       className={[
         'inline-flex h-9 w-9 items-center justify-center rounded-full border border-border',

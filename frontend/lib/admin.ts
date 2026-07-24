@@ -1,3 +1,10 @@
+import { getClientLocale, getDictionary } from './i18n'
+
+/** Frontend-owned fallback error copy, in the active language. */
+function adminErrors() {
+  return getDictionary(getClientLocale()).admin.errors
+}
+
 export type Setting = {
   id: string
   key: string
@@ -27,7 +34,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (response.status === 401) {
     window.location.href = '/admin/login'
-    throw new Error('請重新登入')
+    throw new Error(adminErrors().reLogin)
   }
 
   const text = await response.text()
@@ -35,7 +42,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const message =
-      (data as { message?: string | string[] })?.message ?? '操作失敗'
+      (data as { message?: string | string[] })?.message ?? adminErrors().operationFailed
     throw new Error(Array.isArray(message) ? message.join(', ') : message)
   }
   return data as T
@@ -409,7 +416,7 @@ export async function adminLogin(password: string) {
     const data = (await response.json().catch(() => null)) as {
       message?: string
     } | null
-    throw new Error(data?.message ?? '登入失敗')
+    throw new Error(data?.message ?? adminErrors().loginFailed)
   }
 }
 

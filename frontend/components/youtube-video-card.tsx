@@ -1,8 +1,10 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Play, ExternalLink, Eye, Pause } from 'lucide-react'
+import { Play, ExternalLink, Eye, Pause, Search } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
+import { fmt } from '@/lib/i18n'
+import { useLanguage } from '@/lib/i18n/context'
 
 interface YouTubeVideoCardProps {
   title?: string
@@ -76,6 +78,7 @@ export function YouTubeVideoCard({
   onPlay,
   onStop,
 }: YouTubeVideoCardProps) {
+  const { t } = useLanguage()
   const [uncontrolledIsPlaying, setUncontrolledIsPlaying] = useState(false)
   const isControlled = typeof controlledIsPlaying === 'boolean'
   const isPlaying = isControlled ? controlledIsPlaying : uncontrolledIsPlaying
@@ -85,9 +88,12 @@ export function YouTubeVideoCard({
     [videoId, keyword],
   )
 
-  const cardTitle = title || keyword || `YouTube 影片 ${typeof index === 'number' ? index + 1 : ''}`.trim()
-  const cardChannel = channel || 'YouTube'
-  const cardViews = views || '點擊播放'
+  const cardTitle =
+    title ||
+    keyword ||
+    fmt(t.video.fallbackTitle, { n: typeof index === 'number' ? index + 1 : '' }).trim()
+  const cardChannel = channel || t.video.fallbackChannel
+  const cardViews = views || t.video.clickToPlay
   const startPlaying = () => {
     if (!canEmbed) return
     if (onPlay) onPlay()
@@ -114,26 +120,48 @@ export function YouTubeVideoCard({
             />
           </div>
         ) : (
-          <button
-            type="button"
-            onClick={startPlaying}
-            className="relative aspect-video w-full bg-gradient-to-br from-red-500 to-red-700 overflow-hidden"
-          >
-            {thumbnailUrl ? (
-              <img
-                src={thumbnailUrl}
-                alt={cardTitle}
-                className="absolute inset-0 h-full w-full object-cover"
-                loading="lazy"
-              />
-            ) : null}
-            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/30 transition-colors" />
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-md group-hover:scale-110 transition-transform">
-                <Play className="h-6 w-6 text-red-600 fill-red-600 ml-0.5" />
-              </div>
-            </div>
-          </button>
+          // Embeddable → play in place; otherwise the whole cover links out to a
+          // YouTube search so a card with no videoId is still actionable.
+          (() => {
+            const Cover = (
+              <>
+                {thumbnailUrl ? (
+                  <img
+                    src={thumbnailUrl}
+                    alt={cardTitle}
+                    className="absolute inset-0 h-full w-full object-cover"
+                    loading="lazy"
+                  />
+                ) : null}
+                <div className="absolute inset-0 bg-black/20 group-hover:bg-black/30 transition-colors" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-md group-hover:scale-110 transition-transform">
+                    {canEmbed ? (
+                      <Play className="h-6 w-6 text-red-600 fill-red-600 ml-0.5" />
+                    ) : (
+                      <Search className="h-5 w-5 text-red-600" />
+                    )}
+                  </div>
+                </div>
+              </>
+            )
+            const coverClass =
+              'relative aspect-video w-full bg-gradient-to-br from-red-500 to-red-700 overflow-hidden'
+            return canEmbed ? (
+              <button type="button" onClick={startPlaying} className={coverClass}>
+                {Cover}
+              </button>
+            ) : (
+              <a
+                href={watchUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`block ${coverClass}`}
+              >
+                {Cover}
+              </a>
+            )
+          })()
         )}
 
         <div className="flex gap-3 p-3">
@@ -156,7 +184,7 @@ export function YouTubeVideoCard({
               type="button"
               onClick={stopPlaying}
               className="text-muted-foreground hover:text-red-500 transition-colors shrink-0 mt-1"
-              aria-label="停止播放"
+              aria-label={t.video.stop}
             >
               <Pause className="h-4 w-4" />
             </button>
@@ -166,7 +194,7 @@ export function YouTubeVideoCard({
               target="_blank"
               rel="noopener noreferrer"
               className="text-muted-foreground hover:text-red-500 transition-colors shrink-0 mt-1"
-              aria-label="在 YouTube 開啟"
+              aria-label={t.video.openOnYouTube}
             >
               <ExternalLink className="h-4 w-4" />
             </a>

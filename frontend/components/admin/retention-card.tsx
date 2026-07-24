@@ -15,6 +15,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { fmt } from '@/lib/i18n'
+import { useLanguage } from '@/lib/i18n/context'
 import {
   getRetentionStatus,
   runRetention,
@@ -35,6 +37,7 @@ function formatBytes(bytes: number): string {
 }
 
 export function RetentionCard() {
+  const { t } = useLanguage()
   const [usage, setUsage] = useState<RetentionUsage | null>(null)
   const [preview, setPreview] = useState<RetentionResult | null>(null)
   const [loading, setLoading] = useState(true)
@@ -63,8 +66,12 @@ export function RetentionCard() {
     setRunning(true)
     try {
       const result = await runRetention()
-      toast.success('清理完成', {
-        description: `清除 ${result.contentStripped} 筆內文、刪除 ${result.jobsDeleted} 個任務、${result.cacheEntriesDeleted} 筆過期快取`,
+      toast.success(t.admin.retention.cleaned, {
+        description: fmt(t.admin.retention.cleanedDesc, {
+          content: result.contentStripped,
+          jobs: result.jobsDeleted,
+          cache: result.cacheEntriesDeleted,
+        }),
       })
       await refresh()
     } catch (error) {
@@ -88,17 +95,16 @@ export function RetentionCard() {
             <Database className="h-5 w-5" />
           </span>
           <div>
-            <h2 className="font-semibold">資料保留</h2>
+            <h2 className="font-semibold">{t.admin.retention.title}</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              每天 03:17 自動清理。保留天數由 trip.contentRetentionDays（內文，預設 30 天）
-              與 trip.jobRetentionDays（整筆任務，預設 180 天）控制，設為 0 可停用。
+              {t.admin.retention.intro}
             </p>
           </div>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => void refresh()}>
             <RefreshCw className="h-4 w-4" />
-            重新整理
+            {t.common.refresh}
           </Button>
           <Button
             size="sm"
@@ -106,48 +112,51 @@ export function RetentionCard() {
             onClick={() => setConfirmOpen(true)}
           >
             <Play className="h-4 w-4" />
-            {running ? '清理中…' : '立即清理'}
+            {running ? t.admin.retention.cleaning : t.admin.retention.cleanNow}
           </Button>
         </div>
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">載入中…</p>
+        <p className="text-sm text-muted-foreground">{t.common.loading}</p>
       ) : usage && preview ? (
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Metric label="任務總數" value={usage.jobs.toLocaleString()} />
+            <Metric label={t.admin.retention.metric.jobs} value={usage.jobs.toLocaleString()} />
             <Metric
-              label="已抓取文件"
+              label={t.admin.retention.metric.documents}
               value={usage.documents.toLocaleString()}
-              hint={`${usage.documentsWithContent.toLocaleString()} 筆仍保有內文`}
+              hint={fmt(t.admin.retention.documentsHint, {
+                n: usage.documentsWithContent.toLocaleString(),
+              })}
             />
-            <Metric label="內文佔用" value={formatBytes(usage.contentBytes)} />
+            <Metric label={t.admin.retention.metric.content} value={formatBytes(usage.contentBytes)} />
             <Metric
-              label="擷取快取"
+              label={t.admin.retention.metric.cache}
               value={usage.cacheEntries.toLocaleString()}
-              hint={`${usage.expiredCache.toLocaleString()} 筆已過期`}
+              hint={fmt(t.admin.retention.cacheHint, { n: usage.expiredCache.toLocaleString() })}
             />
           </div>
 
           <div className="rounded-lg border border-dashed p-3 text-sm">
-            <p className="font-medium">下次清理將處理</p>
+            <p className="font-medium">{t.admin.retention.nextCleanup}</p>
             {nothingToDo ? (
-              <p className="mt-1 text-muted-foreground">目前沒有符合條件的資料</p>
+              <p className="mt-1 text-muted-foreground">{t.admin.retention.nothingToClean}</p>
             ) : (
               <ul className="mt-1 space-y-0.5 text-muted-foreground">
                 <li>
-                  清除 <strong className="text-foreground">{preview.contentStripped}</strong>{' '}
-                  筆文件內文（{preview.contentRetentionDays} 天前的已完成任務）
+                  {fmt(t.admin.retention.previewContent, {
+                    n: preview.contentStripped,
+                    days: preview.contentRetentionDays,
+                  })}
                 </li>
                 <li>
-                  刪除 <strong className="text-foreground">{preview.jobsDeleted}</strong>{' '}
-                  個任務（{preview.jobRetentionDays} 天前）
+                  {fmt(t.admin.retention.previewJobs, {
+                    n: preview.jobsDeleted,
+                    days: preview.jobRetentionDays,
+                  })}
                 </li>
-                <li>
-                  刪除 <strong className="text-foreground">{preview.cacheEntriesDeleted}</strong>{' '}
-                  筆過期擷取快取
-                </li>
+                <li>{fmt(t.admin.retention.previewCache, { n: preview.cacheEntriesDeleted })}</li>
               </ul>
             )}
           </div>
@@ -156,16 +165,21 @@ export function RetentionCard() {
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
-          <AlertDialogTitle>立即執行清理？</AlertDialogTitle>
+          <AlertDialogTitle>{t.admin.retention.confirmTitle}</AlertDialogTitle>
           <AlertDialogHeader>
             <AlertDialogDescription>
-              將清除 {preview?.contentStripped} 筆文件內文、刪除 {preview?.jobsDeleted}{' '}
-              個任務與 {preview?.cacheEntriesDeleted} 筆過期快取。刪除的任務無法復原。
+              {fmt(t.admin.retention.confirmDescription, {
+                content: preview?.contentStripped ?? 0,
+                jobs: preview?.jobsDeleted ?? 0,
+                cache: preview?.cacheEntriesDeleted ?? 0,
+              })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void handleRun()}>執行清理</AlertDialogAction>
+            <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void handleRun()}>
+              {t.admin.retention.confirmRun}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

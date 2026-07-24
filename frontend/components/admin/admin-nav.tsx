@@ -12,18 +12,21 @@ import {
   TrendingUp,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { LanguageToggle } from '@/components/language-toggle'
+import { useLanguage } from '@/lib/i18n/context'
 import { adminLogout } from '@/lib/admin'
 import { cn } from '@/lib/utils'
 
 const NAV_ITEMS = [
-  { href: '/admin/jobs', label: '任務監控', icon: ListChecks },
-  { href: '/admin/keywords', label: '關鍵字分析', icon: TrendingUp },
-  { href: '/admin/affiliate', label: 'Affiliate 漏斗', icon: ShoppingBag },
-  { href: '/admin/prompts', label: 'Prompt 管理', icon: MessageSquareText },
-  { href: '/admin/settings', label: '系統設定', icon: Settings },
-]
+  { href: '/admin/jobs', key: 'jobs', icon: ListChecks },
+  { href: '/admin/keywords', key: 'keywords', icon: TrendingUp },
+  { href: '/admin/affiliate', key: 'affiliate', icon: ShoppingBag },
+  { href: '/admin/prompts', key: 'prompts', icon: MessageSquareText },
+  { href: '/admin/settings', key: 'settings', icon: Settings },
+] as const
 
 export function AdminNav() {
+  const { t } = useLanguage()
   const pathname = usePathname()
   const router = useRouter()
 
@@ -38,8 +41,8 @@ export function AdminNav() {
   return (
     <aside className="flex w-56 shrink-0 flex-col border-r bg-background">
       <div className="border-b p-4">
-        <p className="text-lg font-semibold">管理後台</p>
-        <p className="text-xs text-muted-foreground">Travel Discovery</p>
+        <p className="text-lg font-semibold">{t.admin.sidebarTitle}</p>
+        <p className="text-xs text-muted-foreground">{t.admin.brand}</p>
       </div>
       <nav className="flex-1 space-y-1 p-2">
         {NAV_ITEMS.map((item) => (
@@ -54,17 +57,20 @@ export function AdminNav() {
             )}
           >
             <item.icon className="h-4 w-4" />
-            {item.label}
+            {t.admin.nav[item.key]}
           </Link>
         ))}
       </nav>
       <div className="space-y-1 border-t p-2">
+        <div className="px-1 pb-1">
+          <LanguageToggle className="w-full justify-start" />
+        </div>
         <Link
           href="/"
           className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <Home className="h-4 w-4" />
-          回前台
+          {t.admin.backToSite}
         </Link>
         <Button
           variant="ghost"
@@ -72,7 +78,7 @@ export function AdminNav() {
           onClick={handleLogout}
         >
           <LogOut className="h-4 w-4" />
-          登出
+          {t.admin.logout}
         </Button>
       </div>
     </aside>

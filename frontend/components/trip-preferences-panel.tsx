@@ -13,13 +13,18 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
+import { fmt } from '@/lib/i18n'
+import { useLanguage } from '@/lib/i18n/context'
 import {
-  BUDGET_OPTIONS,
-  COMPANION_OPTIONS,
+  BUDGET_VALUES,
+  COMPANION_VALUES,
   countTripPreferences,
   DURATION_OPTIONS,
   EMPTY_TRIP_PREFERENCES,
-  PACE_OPTIONS,
+  PACE_VALUES,
+  type TripBudget,
+  type TripCompanions,
+  type TripPace,
   type TripPreferences,
 } from '@/lib/trip'
 
@@ -39,6 +44,7 @@ const MAX_DAYS = 30
  * the traveller only pins down what they actually care about.
  */
 export function TripPreferencesPanel({ value, onChange, disabled }: Props) {
+  const { t } = useLanguage()
   const [open, setOpen] = useState(false)
   const count = countTripPreferences(value)
   const update = (patch: Partial<TripPreferences>) =>
@@ -55,7 +61,7 @@ export function TripPreferencesPanel({ value, onChange, disabled }: Props) {
             className="gap-2 text-muted-foreground hover:text-foreground"
           >
             <Sliders className="h-4 w-4" />
-            進階偏好
+            {t.tripPreferences.trigger}
             {count > 0 && (
               <Badge variant="secondary" className="ml-0.5">
                 {count}
@@ -78,7 +84,7 @@ export function TripPreferencesPanel({ value, onChange, disabled }: Props) {
             onClick={() => onChange(EMPTY_TRIP_PREFERENCES)}
             className="text-muted-foreground hover:text-foreground"
           >
-            清除
+            {t.common.clear}
           </Button>
         )}
       </div>
@@ -87,7 +93,7 @@ export function TripPreferencesPanel({ value, onChange, disabled }: Props) {
         <div className="grid gap-5 rounded-2xl border border-border bg-card/60 p-4 backdrop-blur sm:p-5">
           {/* 天數 — quick chips plus a free number field for anything else. */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium">天數</Label>
+            <Label className="text-sm font-medium">{t.tripPreferences.days}</Label>
             <div className="flex flex-wrap items-center gap-2">
               <ToggleGroup
                 type="single"
@@ -105,7 +111,7 @@ export function TripPreferencesPanel({ value, onChange, disabled }: Props) {
               >
                 {DURATION_OPTIONS.map((d) => (
                   <ToggleGroupItem key={d} value={String(d)} className="px-3">
-                    {d} 天
+                    {fmt(t.tripPreferences.daysValue, { n: d })}
                   </ToggleGroupItem>
                 ))}
               </ToggleGroup>
@@ -115,8 +121,8 @@ export function TripPreferencesPanel({ value, onChange, disabled }: Props) {
                   min={1}
                   max={MAX_DAYS}
                   inputMode="numeric"
-                  aria-label="自訂天數"
-                  placeholder="自訂"
+                  aria-label={t.tripPreferences.customDays}
+                  placeholder={t.tripPreferences.customPlaceholder}
                   disabled={disabled}
                   value={value.durationDays ?? ''}
                   onChange={(e) => {
@@ -132,30 +138,33 @@ export function TripPreferencesPanel({ value, onChange, disabled }: Props) {
                   }}
                   className="h-9 w-20"
                 />
-                <span className="text-sm text-muted-foreground">天</span>
+                <span className="text-sm text-muted-foreground">{t.tripPreferences.dayUnit}</span>
               </div>
             </div>
           </div>
 
-          <ChipRow
-            label="同行類型"
-            options={COMPANION_OPTIONS}
+          <ChipRow<TripCompanions>
+            label={t.tripPreferences.companions}
+            options={COMPANION_VALUES}
+            labelFor={(v) => t.tripPreferences.companionOptions[v]}
             value={value.companions}
             disabled={disabled}
             onChange={(companions) => update({ companions })}
           />
 
           <div className="grid gap-5 sm:grid-cols-2">
-            <ChipRow
-              label="節奏"
-              options={PACE_OPTIONS}
+            <ChipRow<TripPace>
+              label={t.tripPreferences.pace}
+              options={PACE_VALUES}
+              labelFor={(v) => t.tripPreferences.paceOptions[v]}
               value={value.pace}
               disabled={disabled}
               onChange={(pace) => update({ pace })}
             />
-            <ChipRow
-              label="預算"
-              options={BUDGET_OPTIONS}
+            <ChipRow<TripBudget>
+              label={t.tripPreferences.budget}
+              options={BUDGET_VALUES}
+              labelFor={(v) => t.tripPreferences.budgetOptions[v]}
               value={value.budget}
               disabled={disabled}
               onChange={(budget) => update({ budget })}
@@ -165,8 +174,8 @@ export function TripPreferencesPanel({ value, onChange, disabled }: Props) {
           <div className="grid gap-5 sm:grid-cols-2">
             <TagField
               id="pref-must-visit"
-              label="想去"
-              placeholder="輸入地點後按 Enter"
+              label={t.tripPreferences.mustVisit}
+              placeholder={t.tripPreferences.tagPlaceholder}
               tone="positive"
               values={value.mustVisit}
               disabled={disabled}
@@ -174,8 +183,8 @@ export function TripPreferencesPanel({ value, onChange, disabled }: Props) {
             />
             <TagField
               id="pref-avoid"
-              label="不想去"
-              placeholder="輸入地點後按 Enter"
+              label={t.tripPreferences.avoid}
+              placeholder={t.tripPreferences.tagPlaceholder}
               tone="negative"
               values={value.avoid}
               disabled={disabled}
@@ -184,7 +193,7 @@ export function TripPreferencesPanel({ value, onChange, disabled }: Props) {
           </div>
 
           <p className="text-xs text-muted-foreground">
-            未填的項目會交給 AI 依關鍵字判斷。
+            {t.tripPreferences.footerNote}
           </p>
         </div>
       </CollapsibleContent>
@@ -196,12 +205,14 @@ export function TripPreferencesPanel({ value, onChange, disabled }: Props) {
 function ChipRow<T extends string>({
   label,
   options,
+  labelFor,
   value,
   disabled,
   onChange,
 }: {
   label: string
-  options: { value: T; label: string }[]
+  options: readonly T[]
+  labelFor: (value: T) => string
   value: T | null
   disabled?: boolean
   onChange: (next: T | null) => void
@@ -218,8 +229,8 @@ function ChipRow<T extends string>({
         className="flex-wrap justify-start"
       >
         {options.map((option) => (
-          <ToggleGroupItem key={option.value} value={option.value} className="px-3">
-            {option.label}
+          <ToggleGroupItem key={option} value={option} className="px-3">
+            {labelFor(option)}
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
@@ -245,6 +256,7 @@ function TagField({
   disabled?: boolean
   onChange: (next: string[]) => void
 }) {
+  const { t } = useLanguage()
   const [draft, setDraft] = useState('')
 
   const add = () => {
@@ -294,7 +306,7 @@ function TagField({
           onClick={add}
         >
           <Plus className="h-4 w-4" />
-          加入
+          {t.common.add}
         </Button>
       </div>
       {values.length > 0 && (
@@ -311,7 +323,7 @@ function TagField({
               {tag}
               <button
                 type="button"
-                aria-label={`移除 ${tag}`}
+                aria-label={fmt(t.tripPreferences.removeTag, { tag })}
                 disabled={disabled}
                 onClick={() => remove(tag)}
                 className="rounded-full p-0.5 transition-colors hover:bg-foreground/10"

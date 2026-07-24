@@ -53,6 +53,8 @@ import {
 import { LlmSettingsCard } from '@/components/admin/llm-settings-card'
 import { SettingHistoryDialog } from '@/components/admin/setting-history-dialog'
 import { RetentionCard } from '@/components/admin/retention-card'
+import { bcp47, fmt } from '@/lib/i18n'
+import { useLanguage } from '@/lib/i18n/context'
 
 const KEY_PATTERN = /^[a-zA-Z0-9._-]{1,100}$/
 
@@ -64,6 +66,7 @@ const EMPTY_FORM: SettingInput = {
 }
 
 export default function AdminSettingsPage() {
+  const { t, locale } = useLanguage()
   const [settings, setSettings] = useState<Setting[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -112,15 +115,15 @@ export default function AdminSettingsPage() {
 
   const validate = (): string | null => {
     if (!editingKey && !KEY_PATTERN.test(form.key.trim())) {
-      return 'key 只能包含英數字與 . _ -（最多 100 字元）'
+      return t.admin.settings.validate.key
     }
     const value = form.value.trim()
-    if (!value) return '請輸入 value'
+    if (!value) return t.admin.settings.validate.valueRequired
     if (form.valueType === 'number' && !Number.isFinite(Number(value))) {
-      return 'value 必須是有效數字'
+      return t.admin.settings.validate.number
     }
     if (form.valueType === 'boolean' && value !== 'true' && value !== 'false') {
-      return 'value 必須是 true 或 false'
+      return t.admin.settings.validate.boolean
     }
     return null
   }
@@ -141,10 +144,10 @@ export default function AdminSettingsPage() {
       }
       if (editingKey) {
         await updateSetting(editingKey, input)
-        toast.success(`已更新 ${editingKey}`)
+        toast.success(fmt(t.admin.settings.updated, { key: editingKey }))
       } else {
         await createSetting({ ...input, key: form.key.trim() })
-        toast.success(`已新增 ${form.key.trim()}`)
+        toast.success(fmt(t.admin.settings.added, { key: form.key.trim() }))
       }
       setDialogOpen(false)
       await refresh()
@@ -159,7 +162,7 @@ export default function AdminSettingsPage() {
     if (!deleteTarget) return
     try {
       await deleteSetting(deleteTarget.key)
-      toast.success(`已刪除 ${deleteTarget.key}`)
+      toast.success(fmt(t.admin.settings.deleted, { key: deleteTarget.key }))
       setDeleteTarget(null)
       await refresh()
     } catch (error) {
@@ -171,19 +174,19 @@ export default function AdminSettingsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">系統設定</h1>
+          <h1 className="text-2xl font-semibold">{t.admin.settings.title}</h1>
           <p className="text-sm text-muted-foreground">
-            DB 設定值優先於環境變數；trip.* 設定會即時影響行程產生流程
+            {t.admin.settings.subtitle}
           </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => void refresh()}>
             <RefreshCw className="h-4 w-4" />
-            重新整理
+            {t.common.refresh}
           </Button>
           <Button size="sm" onClick={openCreate}>
             <Plus className="h-4 w-4" />
-            新增設定
+            {t.admin.settings.addSetting}
           </Button>
         </div>
       </div>
@@ -196,25 +199,25 @@ export default function AdminSettingsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Key</TableHead>
-              <TableHead>Value</TableHead>
-              <TableHead>型別</TableHead>
-              <TableHead className="hidden md:table-cell">說明</TableHead>
-              <TableHead className="hidden lg:table-cell">更新時間</TableHead>
-              <TableHead className="w-32 text-right">操作</TableHead>
+              <TableHead>{t.admin.settings.col.key}</TableHead>
+              <TableHead>{t.admin.settings.col.value}</TableHead>
+              <TableHead>{t.admin.settings.col.type}</TableHead>
+              <TableHead className="hidden md:table-cell">{t.admin.settings.col.description}</TableHead>
+              <TableHead className="hidden lg:table-cell">{t.admin.settings.col.updatedAt}</TableHead>
+              <TableHead className="w-32 text-right">{t.admin.settings.col.actions}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
                 <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                  載入中…
+                  {t.common.loading}
                 </TableCell>
               </TableRow>
             ) : settings.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                  尚無設定，點「新增設定」建立第一筆
+                  {t.admin.settings.empty}
                 </TableCell>
               </TableRow>
             ) : (
@@ -238,15 +241,15 @@ export default function AdminSettingsPage() {
                     {setting.description}
                   </TableCell>
                   <TableCell className="hidden text-sm text-muted-foreground lg:table-cell">
-                    {new Date(setting.updatedAt).toLocaleString('zh-TW')}
+                    {new Date(setting.updatedAt).toLocaleString(bcp47(locale))}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => setHistoryKey(setting.key)}
-                      aria-label={`${setting.key} 變更紀錄`}
-                      title="變更紀錄"
+                      aria-label={fmt(t.admin.settings.historyAria, { key: setting.key })}
+                      title={t.admin.settings.historyTitle}
                     >
                       <History className="h-4 w-4" />
                     </Button>
@@ -254,7 +257,7 @@ export default function AdminSettingsPage() {
                       variant="ghost"
                       size="icon"
                       onClick={() => openEdit(setting)}
-                      aria-label={`編輯 ${setting.key}`}
+                      aria-label={fmt(t.admin.settings.editAria, { key: setting.key })}
                     >
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -262,7 +265,7 @@ export default function AdminSettingsPage() {
                       variant="ghost"
                       size="icon"
                       onClick={() => setDeleteTarget(setting)}
-                      aria-label={`刪除 ${setting.key}`}
+                      aria-label={fmt(t.admin.settings.deleteAria, { key: setting.key })}
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
@@ -277,16 +280,18 @@ export default function AdminSettingsPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingKey ? `編輯 ${editingKey}` : '新增設定'}</DialogTitle>
+            <DialogTitle>
+              {editingKey ? fmt(t.admin.settings.editTitle, { key: editingKey }) : t.admin.settings.addTitle}
+            </DialogTitle>
             <DialogDescription>
               {editingKey
-                ? '修改設定值後，下一個任務即會套用新設定'
-                : '例如 trip.targetDocuments = 30（每次抓取 30 篇資料）'}
+                ? t.admin.settings.editDescription
+                : t.admin.settings.addDescription}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="setting-key">Key</Label>
+              <Label htmlFor="setting-key">{t.admin.settings.labelKey}</Label>
               <Input
                 id="setting-key"
                 value={form.key}
@@ -304,7 +309,7 @@ export default function AdminSettingsPage() {
                   form.valueType === 'string' && 'col-span-2',
                 )}
               >
-                <Label htmlFor="setting-value">Value</Label>
+                <Label htmlFor="setting-value">{t.admin.settings.labelValue}</Label>
                 {/* String values include multi-line LLM system prompts. */}
                 {form.valueType === 'string' ? (
                   <Textarea
@@ -334,7 +339,7 @@ export default function AdminSettingsPage() {
                 )}
               </div>
               <div className="space-y-2">
-                <Label>型別</Label>
+                <Label>{t.admin.settings.labelType}</Label>
                 <Select
                   value={form.valueType}
                   onValueChange={(value) =>
@@ -356,7 +361,7 @@ export default function AdminSettingsPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="setting-description">說明（選填）</Label>
+              <Label htmlFor="setting-description">{t.admin.settings.labelDescription}</Label>
               <Input
                 id="setting-description"
                 value={form.description ?? ''}
@@ -372,10 +377,10 @@ export default function AdminSettingsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
-              取消
+              {t.common.cancel}
             </Button>
             <Button onClick={() => void handleSave()} disabled={saving}>
-              {saving ? '儲存中…' : '儲存'}
+              {saving ? t.common.saving : t.common.save}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -393,15 +398,17 @@ export default function AdminSettingsPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>刪除 {deleteTarget?.key}？</AlertDialogTitle>
+            <AlertDialogTitle>
+              {fmt(t.admin.settings.deleteTitle, { key: deleteTarget?.key ?? '' })}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              刪除後系統會改用環境變數 / 預設值，此操作無法復原。
+              {t.admin.settings.deleteDescription}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
             <AlertDialogAction onClick={() => void handleDelete()}>
-              刪除
+              {t.common.delete}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

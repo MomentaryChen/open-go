@@ -34,17 +34,21 @@ import {
   type TrendPoint,
 } from '@/lib/admin'
 import { formatDateTime, formatPercent } from '@/components/admin/job-status-badge'
+import { bcp47, fmt } from '@/lib/i18n'
+import { useLanguage } from '@/lib/i18n/context'
 
-const RANGE_OPTIONS = [
-  { value: '7', label: '近 7 天' },
-  { value: '30', label: '近 30 天' },
-  { value: '90', label: '近 90 天' },
-]
+const RANGE_VALUES = ['7', '30', '90'] as const
+const RANGE_KEY: Record<string, 'd7' | 'd30' | 'd90'> = {
+  '7': 'd7',
+  '30': 'd30',
+  '90': 'd90',
+}
 
 /** A keyword needs a few runs before its failure rate means anything. */
 const MIN_RUNS_FOR_ALERT = 2
 
 export default function AdminKeywordsPage() {
+  const { t } = useLanguage()
   const [days, setDays] = useState('30')
   const [keywords, setKeywords] = useState<KeywordStat[]>([])
   const [trend, setTrend] = useState<TrendPoint[]>([])
@@ -89,9 +93,9 @@ export default function AdminKeywordsPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">關鍵字分析</h1>
+          <h1 className="text-2xl font-semibold">{t.admin.keywords.title}</h1>
           <p className="text-sm text-muted-foreground">
-            使用者實際搜尋的關鍵字、成功率與內容覆蓋度
+            {t.admin.keywords.subtitle}
           </p>
         </div>
         <div className="flex gap-2">
@@ -100,27 +104,27 @@ export default function AdminKeywordsPage() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {RANGE_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
+              {RANGE_VALUES.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {t.admin.range[RANGE_KEY[value]]}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Button variant="outline" size="sm" onClick={() => void refresh()}>
             <RefreshCw className="h-4 w-4" />
-            重新整理
+            {t.common.refresh}
           </Button>
         </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <StatCard label="不重複關鍵字" value={String(keywords.length)} />
-        <StatCard label="總查詢次數" value={String(totalRuns)} />
+        <StatCard label={t.admin.keywords.stat.unique} value={String(keywords.length)} />
+        <StatCard label={t.admin.keywords.stat.total} value={String(totalRuns)} />
         <StatCard
-          label="高失敗率關鍵字"
+          label={t.admin.keywords.stat.highFailure}
           value={String(problemKeywords.length)}
-          hint="失敗率 > 30% 且執行 2 次以上"
+          hint={t.admin.keywords.stat.highFailureHint}
         />
       </div>
 
@@ -128,9 +132,9 @@ export default function AdminKeywordsPage() {
 
       <Tabs defaultValue="keywords">
         <TabsList>
-          <TabsTrigger value="keywords">熱門關鍵字</TabsTrigger>
-          <TabsTrigger value="gaps">內容缺口 ({gaps.length})</TabsTrigger>
-          <TabsTrigger value="hosts">來源網域 ({hosts.length})</TabsTrigger>
+          <TabsTrigger value="keywords">{t.admin.keywords.tabTop}</TabsTrigger>
+          <TabsTrigger value="gaps">{fmt(t.admin.keywords.tabGaps, { n: gaps.length })}</TabsTrigger>
+          <TabsTrigger value="hosts">{fmt(t.admin.keywords.tabHosts, { n: hosts.length })}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="keywords">
@@ -138,28 +142,28 @@ export default function AdminKeywordsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>關鍵字</TableHead>
-                  <TableHead className="w-20 text-right">次數</TableHead>
-                  <TableHead className="w-20 text-right">完成</TableHead>
-                  <TableHead className="w-20 text-right">失敗</TableHead>
-                  <TableHead className="w-24 text-right">失敗率</TableHead>
+                  <TableHead>{t.admin.keywords.col.keyword}</TableHead>
+                  <TableHead className="w-20 text-right">{t.admin.keywords.col.count}</TableHead>
+                  <TableHead className="w-20 text-right">{t.admin.keywords.col.done}</TableHead>
+                  <TableHead className="w-20 text-right">{t.admin.keywords.col.failed}</TableHead>
+                  <TableHead className="w-24 text-right">{t.admin.keywords.col.failureRate}</TableHead>
                   <TableHead className="hidden w-28 text-right md:table-cell">
-                    平均文件
+                    {t.admin.keywords.col.avgDocs}
                   </TableHead>
-                  <TableHead className="hidden w-40 lg:table-cell">最後查詢</TableHead>
+                  <TableHead className="hidden w-40 lg:table-cell">{t.admin.keywords.col.lastQuery}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
                     <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                      載入中…
+                      {t.common.loading}
                     </TableCell>
                   </TableRow>
                 ) : keywords.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                      此區間沒有任何查詢紀錄
+                      {t.admin.keywords.emptyQueries}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -207,24 +211,23 @@ export default function AdminKeywordsPage() {
 
         <TabsContent value="gaps" className="space-y-2">
           <p className="text-sm text-muted-foreground">
-            這些關鍵字的任務有完成，但平均只抓到 5 篇以下的可用文件——行程內容會偏薄，
-            不會被列為失敗，是最容易被忽略的品質問題。
+            {t.admin.keywords.gapsIntro}
           </p>
           <div className="rounded-lg border bg-background">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>關鍵字</TableHead>
-                  <TableHead className="w-24 text-right">任務數</TableHead>
-                  <TableHead className="w-28 text-right">平均文件</TableHead>
-                  <TableHead className="hidden w-40 lg:table-cell">最後查詢</TableHead>
+                  <TableHead>{t.admin.keywords.gapsCol.keyword}</TableHead>
+                  <TableHead className="w-24 text-right">{t.admin.keywords.gapsCol.jobs}</TableHead>
+                  <TableHead className="w-28 text-right">{t.admin.keywords.gapsCol.avgDocs}</TableHead>
+                  <TableHead className="hidden w-40 lg:table-cell">{t.admin.keywords.gapsCol.lastQuery}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {gaps.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={4} className="h-20 text-center text-muted-foreground">
-                      沒有內容偏薄的關鍵字
+                      {t.admin.keywords.gapsEmpty}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -255,25 +258,24 @@ export default function AdminKeywordsPage() {
 
         <TabsContent value="hosts" className="space-y-2">
           <p className="text-sm text-muted-foreground">
-            爬蟲對各網域的抓取成功率。標記為「自動封鎖」的網域，系統會在後續任務中
-            主動略過（嘗試 3 次以上且從未成功）。
+            {t.admin.keywords.hostsIntro}
           </p>
           <div className="rounded-lg border bg-background">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>網域</TableHead>
-                  <TableHead className="w-24 text-right">嘗試</TableHead>
-                  <TableHead className="w-24 text-right">成功</TableHead>
-                  <TableHead className="w-28 text-right">成功率</TableHead>
-                  <TableHead className="w-28">狀態</TableHead>
+                  <TableHead>{t.admin.keywords.hostsCol.host}</TableHead>
+                  <TableHead className="w-24 text-right">{t.admin.keywords.hostsCol.attempts}</TableHead>
+                  <TableHead className="w-24 text-right">{t.admin.keywords.hostsCol.success}</TableHead>
+                  <TableHead className="w-28 text-right">{t.admin.keywords.hostsCol.successRate}</TableHead>
+                  <TableHead className="w-28">{t.admin.keywords.hostsCol.status}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {hosts.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="h-20 text-center text-muted-foreground">
-                      此區間沒有足夠的抓取紀錄
+                      {t.admin.keywords.hostsEmpty}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -288,7 +290,7 @@ export default function AdminKeywordsPage() {
                       <TableCell>
                         {row.autoBlocked && (
                           <Badge variant="secondary" className="bg-destructive/15 text-destructive">
-                            自動封鎖
+                            {t.admin.keywords.autoBlocked}
                           </Badge>
                         )}
                       </TableCell>
@@ -309,25 +311,26 @@ export default function AdminKeywordsPage() {
  * library: one series pair, no axes worth the dependency.
  */
 function TrendChart({ data, loading }: { data: TrendPoint[]; loading: boolean }) {
+  const { t, locale } = useLanguage()
   const max = Math.max(1, ...data.map((point) => point.total))
 
   return (
     <Card className="gap-3 p-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium">每日查詢量</p>
+        <p className="text-sm font-medium">{t.admin.keywords.chartTitle}</p>
         <div className="flex gap-3 text-xs text-muted-foreground">
           <span className="flex items-center gap-1">
-            <span className="h-2 w-2 rounded-sm bg-emerald-500" />成功
+            <span className="h-2 w-2 rounded-sm bg-emerald-500" />{t.admin.keywords.chartDone}
           </span>
           <span className="flex items-center gap-1">
-            <span className="h-2 w-2 rounded-sm bg-destructive" />失敗
+            <span className="h-2 w-2 rounded-sm bg-destructive" />{t.admin.keywords.chartFailed}
           </span>
         </div>
       </div>
       {loading ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">載入中…</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">{t.common.loading}</p>
       ) : data.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">此區間沒有資料</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">{t.admin.keywords.chartEmpty}</p>
       ) : (
         <div className="flex h-32 items-end gap-1 overflow-x-auto">
           {data.map((point) => {
@@ -336,7 +339,12 @@ function TrendChart({ data, loading }: { data: TrendPoint[]; loading: boolean })
               <div
                 key={String(point.day)}
                 className="flex min-w-2 flex-1 flex-col justify-end gap-px"
-                title={`${new Date(point.day).toLocaleDateString('zh-TW')}\n總計 ${point.total} · 成功 ${point.done} · 失敗 ${point.failed}`}
+                title={fmt(t.admin.keywords.chartTooltip, {
+                  date: new Date(point.day).toLocaleDateString(bcp47(locale)),
+                  total: point.total,
+                  done: point.done,
+                  failed: point.failed,
+                })}
               >
                 {other > 0 && (
                   <div

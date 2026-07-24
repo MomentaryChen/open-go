@@ -13,20 +13,20 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { bcp47, fmt } from '@/lib/i18n'
+import { useLanguage } from '@/lib/i18n/context'
 import {
   getSettingHistory,
   revertSetting,
   type SettingHistoryEntry,
 } from '@/lib/admin'
 
-const ACTION_META: Record<
-  SettingHistoryEntry['action'],
-  { label: string; className: string }
-> = {
-  create: { label: '新增', className: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' },
-  update: { label: '修改', className: 'bg-blue-500/15 text-blue-700 dark:text-blue-300' },
-  delete: { label: '刪除', className: 'bg-destructive/15 text-destructive' },
-  revert: { label: '還原', className: 'bg-amber-500/15 text-amber-700 dark:text-amber-300' },
+// Colors per action; labels resolve via `t.admin.settingHistory.action[action]`.
+const ACTION_CLASS: Record<SettingHistoryEntry['action'], string> = {
+  create: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
+  update: 'bg-blue-500/15 text-blue-700 dark:text-blue-300',
+  delete: 'bg-destructive/15 text-destructive',
+  revert: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
 }
 
 /** Long prompt values are unreadable in full; show enough to identify a version. */
@@ -39,6 +39,7 @@ type Props = {
 }
 
 export function SettingHistoryDialog({ settingKey, onClose, onReverted }: Props) {
+  const { t, locale } = useLanguage()
   const [entries, setEntries] = useState<SettingHistoryEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [revertingId, setRevertingId] = useState<string | null>(null)
@@ -64,7 +65,7 @@ export function SettingHistoryDialog({ settingKey, onClose, onReverted }: Props)
     setRevertingId(entry.id)
     try {
       await revertSetting(settingKey, entry.id)
-      toast.success('已還原此版本，下一個任務即套用')
+      toast.success(t.admin.settingHistory.reverted)
       await onReverted?.()
       await load(settingKey)
     } catch (error) {
@@ -80,36 +81,37 @@ export function SettingHistoryDialog({ settingKey, onClose, onReverted }: Props)
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <History className="h-4 w-4" />
-            變更紀錄
+            {t.admin.settingHistory.title}
           </DialogTitle>
           <DialogDescription>
-            <code className="font-mono">{settingKey}</code> 的所有變更；
-            點「還原」可回到該版本的值，還原動作本身也會被記錄。
+            <code className="font-mono">{settingKey}</code>
+            {t.admin.settingHistory.descriptionSuffix}
           </DialogDescription>
         </DialogHeader>
 
         <ScrollArea className="max-h-[60vh] pr-3">
           {loading ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">載入中…</p>
+            <p className="py-8 text-center text-sm text-muted-foreground">{t.common.loading}</p>
           ) : entries.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              尚無變更紀錄（此設定自稽核功能上線後未被修改過）
+              {t.admin.settingHistory.empty}
             </p>
           ) : (
             <ol className="space-y-3">
               {entries.map((entry, index) => {
-                const meta = ACTION_META[entry.action]
                 const restorable = (entry.newValue ?? entry.oldValue) !== null
                 return (
                   <li key={entry.id} className="rounded-lg border p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <Badge variant="secondary" className={meta.className}>
-                          {meta.label}
+                        <Badge variant="secondary" className={ACTION_CLASS[entry.action]}>
+                          {t.admin.settingHistory.action[entry.action]}
                         </Badge>
-                        {index === 0 && <Badge variant="outline">目前版本</Badge>}
+                        {index === 0 && (
+                          <Badge variant="outline">{t.admin.settingHistory.currentVersion}</Badge>
+                        )}
                         <span className="text-xs text-muted-foreground">
-                          {new Date(entry.createdAt).toLocaleString('zh-TW', {
+                          {new Date(entry.createdAt).toLocaleString(bcp47(locale), {
                             hour12: false,
                           })}
                         </span>
@@ -123,18 +125,20 @@ export function SettingHistoryDialog({ settingKey, onClose, onReverted }: Props)
                         onClick={() => void handleRevert(entry)}
                       >
                         <RotateCcw className="h-3.5 w-3.5" />
-                        {revertingId === entry.id ? '還原中…' : '還原'}
+                        {revertingId === entry.id
+                          ? t.admin.settingHistory.reverting
+                          : t.admin.settingHistory.revert}
                       </Button>
                     </div>
 
                     {entry.oldValue !== null && (
-                      <ValueBlock label="變更前" value={entry.oldValue} muted />
+                      <ValueBlock label={t.admin.settingHistory.before} value={entry.oldValue} muted />
                     )}
                     {entry.newValue !== null ? (
-                      <ValueBlock label="變更後" value={entry.newValue} />
+                      <ValueBlock label={t.admin.settingHistory.after} value={entry.newValue} />
                     ) : (
                       <p className="mt-2 text-xs text-muted-foreground">
-                        （設定已被刪除）
+                        {t.admin.settingHistory.deletedNote}
                       </p>
                     )}
                   </li>
@@ -157,6 +161,7 @@ function ValueBlock({
   value: string
   muted?: boolean
 }) {
+  const { t } = useLanguage()
   const truncated = value.length > PREVIEW_CHARS
   return (
     <div className="mt-2">
@@ -170,7 +175,7 @@ function ValueBlock({
       </pre>
       {truncated && (
         <p className="mt-0.5 text-xs text-muted-foreground">
-          共 {value.length.toLocaleString()} 字元，已截斷顯示
+          {fmt(t.admin.settingHistory.truncated, { n: value.length.toLocaleString() })}
         </p>
       )}
     </div>

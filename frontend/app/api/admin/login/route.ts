@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ADMIN_COOKIE, adminCookieValue } from '@/lib/admin-auth'
+import { fmt, getDictionary } from '@/lib/i18n'
+import { getServerLocale } from '@/lib/i18n/server'
 import {
   checkLockout,
   clientKey,
@@ -11,13 +13,11 @@ import {
 } from '@/lib/login-rate-limit'
 
 export async function POST(request: NextRequest) {
+  const e = getDictionary(await getServerLocale()).admin.apiErrors
   // `||` rather than `??`: docker-compose passes unset variables through as "".
   const password = process.env.ADMIN_PASSWORD || ''
   if (!password) {
-    return NextResponse.json(
-      { message: '尚未設定 ADMIN_PASSWORD，請先在環境變數中設定' },
-      { status: 503 },
-    )
+    return NextResponse.json({ message: e.adminPasswordNotSet }, { status: 503 })
   }
 
   const key = clientKey(request.headers)
@@ -26,7 +26,9 @@ export async function POST(request: NextRequest) {
   if (lockout.locked) {
     return NextResponse.json(
       {
-        message: `嘗試次數過多，請於 ${Math.ceil(lockout.retryAfterSeconds / 60)} 分鐘後再試`,
+        message: fmt(e.tooManyRetry, {
+          minutes: Math.ceil(lockout.retryAfterSeconds / 60),
+        }),
       },
       { status: 429, headers: { 'Retry-After': String(lockout.retryAfterSeconds) } },
     )
@@ -36,7 +38,7 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json()
   } catch {
-    return NextResponse.json({ message: '請輸入密碼' }, { status: 400 })
+    return NextResponse.json({ message: e.passwordRequired }, { status: 400 })
   }
 
   if (!secretsMatch(body?.password, password)) {
@@ -45,7 +47,7 @@ export async function POST(request: NextRequest) {
     const tripped = recordFailure(key)
     if (tripped.locked) {
       return NextResponse.json(
-        { message: '嘗試次數過多，帳號已暫時鎖定 15 分鐘' },
+        { message: e.accountLocked },
         {
           status: 429,
           headers: { 'Retry-After': String(tripped.retryAfterSeconds) },
@@ -54,7 +56,7 @@ export async function POST(request: NextRequest) {
     }
     const left = remainingAttempts(key)
     return NextResponse.json(
-      { message: `密碼錯誤，剩餘 ${left} 次嘗試機會` },
+      { message: fmt(e.wrongPassword, { left }) },
       { status: 401 },
     )
   }

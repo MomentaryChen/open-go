@@ -23,38 +23,48 @@ import {
   type Setting,
 } from '@/lib/admin'
 import { SettingHistoryDialog } from '@/components/admin/setting-history-dialog'
+import { bcp47, fmt } from '@/lib/i18n'
+import { useLanguage } from '@/lib/i18n/context'
 
 const MAX_LENGTH = 8000
 
 type PromptKey = 'trip.plannerSystemPrompt' | 'trip.composerSystemPrompt'
 
+// Title / stage / note resolve via `t.admin.prompts.list` keyed on `metaKey`.
 const PROMPTS: Array<{
   key: PromptKey
   defaultsKey: keyof PromptDefaults
-  title: string
-  stage: string
+  metaKey: 'keyword' | 'compose'
   icon: LucideIcon
-  note: string
 }> = [
   {
     key: 'trip.plannerSystemPrompt',
     defaultsKey: 'planner',
-    title: '關鍵字規劃 Prompt',
-    stage: 'Pipeline 第 1 步',
+    metaKey: 'keyword',
     icon: BrainCircuit,
-    note: '控制關鍵字如何被拆解成搜尋查詢：查詢數量、語言組合、查詢風格。',
   },
   {
     key: 'trip.composerSystemPrompt',
     defaultsKey: 'composer',
-    title: '行程組合 Prompt',
-    stage: 'Pipeline 最終步',
+    metaKey: 'compose',
     icon: Wand2,
-    note: '控制行程的編排規則：引用來源、地理動線、餐食安排。輸出語言規則由系統自動附加，不需要在此撰寫。',
   },
 ]
 
 export default function AdminPromptsPage() {
+  const { t, locale } = useLanguage()
+  const promptMeta = (metaKey: 'keyword' | 'compose') =>
+    metaKey === 'keyword'
+      ? {
+          title: t.admin.prompts.list.keywordTitle,
+          stage: t.admin.prompts.list.keywordStage,
+          note: t.admin.prompts.list.keywordNote,
+        }
+      : {
+          title: t.admin.prompts.list.composeTitle,
+          stage: t.admin.prompts.list.composeStage,
+          note: t.admin.prompts.list.composeNote,
+        }
   const [settings, setSettings] = useState<Map<string, Setting>>(new Map())
   const [defaults, setDefaults] = useState<PromptDefaults | null>(null)
   const [drafts, setDrafts] = useState<Record<PromptKey, string>>({
@@ -95,12 +105,13 @@ export default function AdminPromptsPage() {
 
   const handleSave = async (prompt: (typeof PROMPTS)[number]) => {
     const value = drafts[prompt.key].trim()
+    const title = promptMeta(prompt.metaKey).title
     if (!value) {
-      toast.error('Prompt 不可為空白；若要恢復預設請按「恢復預設」再儲存')
+      toast.error(t.admin.prompts.emptyError)
       return
     }
     if (value.length > MAX_LENGTH) {
-      toast.error(`Prompt 不可超過 ${MAX_LENGTH} 字元`)
+      toast.error(fmt(t.admin.prompts.tooLong, { max: MAX_LENGTH }))
       return
     }
 
@@ -114,10 +125,10 @@ export default function AdminPromptsPage() {
           key: prompt.key,
           value,
           valueType: 'string',
-          description: `${prompt.title}（由 Prompt 管理頁維護）`,
+          description: fmt(t.admin.prompts.maintainedBy, { title }),
         })
       }
-      toast.success(`已儲存 ${prompt.title}，下一個任務即套用`)
+      toast.success(fmt(t.admin.prompts.saved, { title }))
       await refresh()
     } catch (error) {
       toast.error((error as Error).message)
@@ -132,20 +143,19 @@ export default function AdminPromptsPage() {
       ...prev,
       [prompt.key]: defaults[prompt.defaultsKey],
     }))
-    toast.info('已帶入內建預設，按「儲存」後生效')
+    toast.info(t.admin.prompts.loadedDefault)
   }
 
   if (loading) {
-    return <p className="text-sm text-muted-foreground">載入中…</p>
+    return <p className="text-sm text-muted-foreground">{t.common.loading}</p>
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Prompt 管理</h1>
+        <h1 className="text-2xl font-semibold">{t.admin.prompts.title}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          控制行程產生流程中兩次 LLM 呼叫的 System Prompt。儲存後不需重啟，
-          下一個任務（約 30 秒內）即會套用。
+          {t.admin.prompts.subtitle}
         </p>
       </div>
 
@@ -156,6 +166,7 @@ export default function AdminPromptsPage() {
         const dirty = draft !== saved
         const isDefault = defaults ? draft === defaults[prompt.defaultsKey] : false
         const updatedAt = settings.get(prompt.key)?.updatedAt
+        const meta = promptMeta(prompt.metaKey)
 
         return (
           <Card key={prompt.key} className="p-6">
@@ -166,17 +177,17 @@ export default function AdminPromptsPage() {
                 </span>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="font-semibold">{prompt.title}</h2>
-                    <Badge variant="outline">{prompt.stage}</Badge>
-                    {isDefault && <Badge variant="secondary">內建預設</Badge>}
+                    <h2 className="font-semibold">{meta.title}</h2>
+                    <Badge variant="outline">{meta.stage}</Badge>
+                    {isDefault && <Badge variant="secondary">{t.admin.prompts.builtinDefault}</Badge>}
                     {dirty && (
                       <Badge className="bg-accent text-accent-foreground">
-                        未儲存
+                        {t.admin.prompts.unsaved}
                       </Badge>
                     )}
                   </div>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    {prompt.note}
+                    {meta.note}
                   </p>
                 </div>
               </div>
@@ -200,9 +211,14 @@ export default function AdminPromptsPage() {
 
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
               <p className="text-xs text-muted-foreground tabular-nums">
-                {draft.length.toLocaleString()} / {MAX_LENGTH.toLocaleString()} 字元
+                {fmt(t.admin.prompts.charCount, {
+                  current: draft.length.toLocaleString(),
+                  max: MAX_LENGTH.toLocaleString(),
+                })}
                 {updatedAt &&
-                  ` · 上次更新：${new Date(updatedAt).toLocaleString('zh-TW')}`}
+                  fmt(t.admin.prompts.lastUpdated, {
+                    time: new Date(updatedAt).toLocaleString(bcp47(locale)),
+                  })}
               </p>
               <div className="flex gap-2">
                 <Button
@@ -211,7 +227,7 @@ export default function AdminPromptsPage() {
                   onClick={() => setHistoryKey(prompt.key)}
                 >
                   <History className="h-4 w-4" />
-                  歷史版本
+                  {t.admin.prompts.history}
                 </Button>
                 <Button
                   variant="outline"
@@ -220,7 +236,7 @@ export default function AdminPromptsPage() {
                   onClick={() => handleReset(prompt)}
                 >
                   <RotateCcw className="h-4 w-4" />
-                  恢復預設
+                  {t.admin.prompts.restoreDefault}
                 </Button>
                 <Button
                   size="sm"
@@ -228,7 +244,7 @@ export default function AdminPromptsPage() {
                   onClick={() => void handleSave(prompt)}
                 >
                   <Save className="h-4 w-4" />
-                  {savingKey === prompt.key ? '儲存中…' : '儲存'}
+                  {savingKey === prompt.key ? t.common.saving : t.common.save}
                 </Button>
               </div>
             </div>

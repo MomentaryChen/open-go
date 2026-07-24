@@ -25,6 +25,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { formatDateTime, formatPercent } from '@/components/admin/job-status-badge'
+import { bcp47 } from '@/lib/i18n'
+import { useLanguage } from '@/lib/i18n/context'
 import {
   getAffiliateAnalytics,
   getAffiliateConfig,
@@ -34,33 +36,21 @@ import {
   type AffiliateFunnelCounts,
 } from '@/lib/admin'
 
-const RANGE_OPTIONS = [
-  { value: '7', label: '近 7 天' },
-  { value: '30', label: '近 30 天' },
-  { value: '90', label: '近 90 天' },
-]
-
-const EVENT_LABEL: Record<string, string> = {
-  cta_impression: '曝光',
-  cta_click: '點擊',
-  outbound_redirect: '導出',
-}
-
-const CATEGORY_LABEL: Record<string, string> = {
-  lodging: '住宿',
-  ticket: '票券',
-}
-
-const PARTNER_LABEL: Record<string, string> = {
-  booking: 'Booking.com',
-  trip: 'Trip.com',
-  agoda: 'Agoda',
-  google_hotels: 'Google 飯店',
-  klook: 'Klook',
-  kkday: 'KKday',
+const RANGE_VALUES = ['7', '30', '90'] as const
+const RANGE_KEY: Record<string, 'd7' | 'd30' | 'd90'> = {
+  '7': 'd7',
+  '30': 'd30',
+  '90': 'd90',
 }
 
 export default function AdminAffiliatePage() {
+  const { t, locale } = useLanguage()
+  const eventLabel = (v: string) =>
+    (t.admin.affiliate.eventLabel as Record<string, string>)[v] ?? v
+  const categoryLabel = (v: string) =>
+    (t.admin.affiliate.categoryLabel as Record<string, string>)[v] ?? v
+  const partnerLabel = (v: string) =>
+    (t.admin.affiliate.partnerLabel as Record<string, string>)[v] ?? v
   const [days, setDays] = useState('30')
   const [data, setData] = useState<AffiliateAnalytics | null>(null)
   const [loading, setLoading] = useState(true)
@@ -86,9 +76,9 @@ export default function AdminAffiliatePage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Affiliate 漏斗</h1>
+          <h1 className="text-2xl font-semibold">{t.admin.affiliate.title}</h1>
           <p className="text-sm text-muted-foreground">
-            行程頁住宿／票券 CTA 的曝光、點擊與導出轉換
+            {t.admin.affiliate.subtitle}
           </p>
         </div>
         <div className="flex gap-2">
@@ -97,16 +87,16 @@ export default function AdminAffiliatePage() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {RANGE_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
+              {RANGE_VALUES.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {t.admin.range[RANGE_KEY[value]]}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Button variant="outline" size="sm" onClick={() => void refresh()}>
             <RefreshCw className="h-4 w-4" />
-            重新整理
+            {t.common.refresh}
           </Button>
         </div>
       </div>
@@ -114,11 +104,11 @@ export default function AdminAffiliatePage() {
       <AffiliateConfigCard />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="曝光 (impression)" value={fmt(summary?.impressions)} />
-        <StatCard label="點擊 (click)" value={fmt(summary?.clicks)} />
-        <StatCard label="導出 (redirect)" value={fmt(summary?.redirects)} />
+        <StatCard label={t.admin.affiliate.stat.impression} value={fmt(summary?.impressions)} />
+        <StatCard label={t.admin.affiliate.stat.click} value={fmt(summary?.clicks)} />
+        <StatCard label={t.admin.affiliate.stat.redirect} value={fmt(summary?.redirects)} />
         <StatCard
-          label="點擊率 CTR"
+          label={t.admin.affiliate.stat.ctr}
           value={
             summary?.ctr === null || summary?.ctr === undefined
               ? '—'
@@ -129,45 +119,45 @@ export default function AdminAffiliatePage() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="p-4">
-          <h2 className="mb-3 text-sm font-semibold">依合作夥伴</h2>
+          <h2 className="mb-3 text-sm font-semibold">{t.admin.affiliate.byPartner}</h2>
           <FunnelTable
             loading={loading}
             rows={data?.byPartner ?? []}
             nameKey="partner"
-            nameLabel={(partner) => PARTNER_LABEL[partner] ?? partner}
+            nameLabel={partnerLabel}
           />
         </Card>
         <Card className="p-4">
-          <h2 className="mb-3 text-sm font-semibold">依品類</h2>
+          <h2 className="mb-3 text-sm font-semibold">{t.admin.affiliate.byCategory}</h2>
           <FunnelTable
             loading={loading}
             rows={data?.byCategory ?? []}
             nameKey="category"
-            nameLabel={(category) => CATEGORY_LABEL[category] ?? category}
+            nameLabel={categoryLabel}
           />
         </Card>
       </div>
 
       <Card className="p-4">
-        <h2 className="mb-3 text-sm font-semibold">每日趨勢</h2>
+        <h2 className="mb-3 text-sm font-semibold">{t.admin.affiliate.dailyTrend}</h2>
         {loading && !data ? (
-          <p className="text-sm text-muted-foreground">載入中…</p>
+          <p className="text-sm text-muted-foreground">{t.common.loading}</p>
         ) : !data?.trend.length ? (
-          <p className="text-sm text-muted-foreground">此區間尚無事件</p>
+          <p className="text-sm text-muted-foreground">{t.admin.affiliate.empty}</p>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>日期</TableHead>
-                <TableHead className="text-right">曝光</TableHead>
-                <TableHead className="text-right">點擊</TableHead>
-                <TableHead className="text-right">導出</TableHead>
+                <TableHead>{t.admin.affiliate.trendCol.date}</TableHead>
+                <TableHead className="text-right">{t.admin.affiliate.trendCol.impression}</TableHead>
+                <TableHead className="text-right">{t.admin.affiliate.trendCol.click}</TableHead>
+                <TableHead className="text-right">{t.admin.affiliate.trendCol.redirect}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.trend.map((row) => (
                 <TableRow key={String(row.day)}>
-                  <TableCell>{formatDay(row.day)}</TableCell>
+                  <TableCell>{formatDay(row.day, locale)}</TableCell>
                   <TableCell className="text-right tabular-nums">
                     {row.impressions}
                   </TableCell>
@@ -185,21 +175,21 @@ export default function AdminAffiliatePage() {
       </Card>
 
       <Card className="p-4">
-        <h2 className="mb-3 text-sm font-semibold">最近事件</h2>
+        <h2 className="mb-3 text-sm font-semibold">{t.admin.affiliate.recentEvents}</h2>
         {loading && !data ? (
-          <p className="text-sm text-muted-foreground">載入中…</p>
+          <p className="text-sm text-muted-foreground">{t.common.loading}</p>
         ) : !data?.recent.length ? (
-          <p className="text-sm text-muted-foreground">此區間尚無事件</p>
+          <p className="text-sm text-muted-foreground">{t.admin.affiliate.empty}</p>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>時間</TableHead>
-                <TableHead>事件</TableHead>
-                <TableHead>品類</TableHead>
-                <TableHead>夥伴</TableHead>
-                <TableHead>標籤</TableHead>
-                <TableHead>行程</TableHead>
+                <TableHead>{t.admin.affiliate.recentCol.time}</TableHead>
+                <TableHead>{t.admin.affiliate.recentCol.event}</TableHead>
+                <TableHead>{t.admin.affiliate.recentCol.category}</TableHead>
+                <TableHead>{t.admin.affiliate.recentCol.partner}</TableHead>
+                <TableHead>{t.admin.affiliate.recentCol.label}</TableHead>
+                <TableHead>{t.admin.affiliate.recentCol.trip}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -210,14 +200,14 @@ export default function AdminAffiliatePage() {
                   </TableCell>
                   <TableCell>
                     <Badge variant="secondary">
-                      {EVENT_LABEL[row.event] ?? row.event}
+                      {eventLabel(row.event)}
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {CATEGORY_LABEL[row.category] ?? row.category}
+                    {categoryLabel(row.category)}
                   </TableCell>
                   <TableCell>
-                    {PARTNER_LABEL[row.partner] ?? row.partner}
+                    {partnerLabel(row.partner)}
                   </TableCell>
                   <TableCell className="max-w-[12rem] truncate text-sm">
                     {row.label ?? '—'}
@@ -258,6 +248,7 @@ const EMPTY_CONFIG: AffiliateConfig = {
 }
 
 function AffiliateConfigCard() {
+  const { t } = useLanguage()
   const [config, setConfig] = useState<AffiliateConfig>(EMPTY_CONFIG)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -283,7 +274,7 @@ function AffiliateConfigCard() {
     setSaving(true)
     try {
       setConfig(await saveAffiliateConfig(config))
-      toast.success('已儲存 affiliate 參數')
+      toast.success(t.admin.affiliate.configSaved)
     } catch (error) {
       toast.error((error as Error).message)
     } finally {
@@ -295,13 +286,13 @@ function AffiliateConfigCard() {
     <Card className="p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold">Affiliate 參數設定</h2>
+          <h2 className="text-sm font-semibold">{t.admin.affiliate.configTitle}</h2>
           <p className="text-xs text-muted-foreground">
-            填入各家聯盟 ID，會注入行程頁住宿／票券外連連結。留空＝不帶該參數。
+            {t.admin.affiliate.configDescription}
           </p>
         </div>
         <Button size="sm" onClick={() => void save()} disabled={loading || saving}>
-          {saving ? '儲存中…' : '儲存'}
+          {saving ? t.common.saving : t.common.save}
         </Button>
       </div>
       <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -355,6 +346,7 @@ function ConfigField({
   disabled?: boolean
   onChange: (value: string) => void
 }) {
+  const { t } = useLanguage()
   const id = label.replace(/[^a-z0-9]+/gi, '-').toLowerCase()
   return (
     <div className="space-y-1.5">
@@ -366,7 +358,7 @@ function ConfigField({
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        placeholder="留空＝停用"
+        placeholder={t.admin.affiliate.configPlaceholder}
         autoComplete="off"
       />
     </div>
@@ -384,21 +376,24 @@ function FunnelTable({
   nameKey: 'partner' | 'category'
   nameLabel: (value: string) => string
 }) {
+  const { t } = useLanguage()
   if (loading && !rows.length) {
-    return <p className="text-sm text-muted-foreground">載入中…</p>
+    return <p className="text-sm text-muted-foreground">{t.common.loading}</p>
   }
   if (!rows.length) {
-    return <p className="text-sm text-muted-foreground">此區間尚無事件</p>
+    return <p className="text-sm text-muted-foreground">{t.admin.affiliate.empty}</p>
   }
 
   return (
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>{nameKey === 'partner' ? '夥伴' : '品類'}</TableHead>
-          <TableHead className="text-right">曝光</TableHead>
-          <TableHead className="text-right">點擊</TableHead>
-          <TableHead className="text-right">CTR</TableHead>
+          <TableHead>
+            {nameKey === 'partner' ? t.admin.affiliate.colPartner : t.admin.affiliate.colCategory}
+          </TableHead>
+          <TableHead className="text-right">{t.admin.affiliate.trendCol.impression}</TableHead>
+          <TableHead className="text-right">{t.admin.affiliate.trendCol.click}</TableHead>
+          <TableHead className="text-right">{t.admin.affiliate.ctr}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -437,10 +432,10 @@ function fmt(value: number | undefined) {
   return value === undefined ? '—' : String(value)
 }
 
-function formatDay(value: string) {
+function formatDay(value: string, locale: import('@/lib/i18n').Locale) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleDateString('zh-TW', {
+  return date.toLocaleDateString(bcp47(locale), {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

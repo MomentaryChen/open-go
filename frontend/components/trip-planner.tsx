@@ -16,11 +16,14 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ItineraryView } from '@/components/itinerary-view'
+import { LanguageToggle } from '@/components/language-toggle'
 import { ShareActions } from '@/components/share-actions'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { TripHistoryMenu } from '@/components/trip-history-menu'
 import { TripPreferencesPanel } from '@/components/trip-preferences-panel'
 import { TripProgress } from '@/components/trip-progress'
+import { fmt } from '@/lib/i18n'
+import { useLanguage } from '@/lib/i18n/context'
 import { copyText } from '@/lib/clipboard'
 import {
   apiBaseUrl,
@@ -67,14 +70,8 @@ async function fetchJob(jobId: string): Promise<StoredJob | null> {
   }
 }
 
-const EXAMPLES = [
-  { emoji: '🎡', label: '大阪三天兩夜親子自由行' },
-  { emoji: '🍁', label: '京都賞楓五日深度旅遊' },
-  { emoji: '🍜', label: '台南美食兩天一夜' },
-  { emoji: '🛍️', label: 'Seoul 4 days shopping trip' },
-]
-
 export function TripPlanner() {
+  const { t, locale } = useLanguage()
   const [keyword, setKeyword] = useState('')
   const [preferences, setPreferences] = useState<TripPreferences>(
     EMPTY_TRIP_PREFERENCES,
@@ -127,19 +124,20 @@ export function TripPlanner() {
 
     try {
       const response = await fetch(`${apiBaseUrl()}/trips/${jobId}`)
-      if (!response.ok) throw new Error(`此紀錄已不存在 (${response.status})`)
+      if (!response.ok)
+        throw new Error(fmt(t.tripPlanner.recordGone, { status: response.status }))
       const job = (await response.json()) as {
         keyword?: string
         itinerary?: { data?: Itinerary } | null
       }
-      if (!job.itinerary?.data) throw new Error('此紀錄沒有可顯示的行程')
+      if (!job.itinerary?.data) throw new Error(t.tripPlanner.recordNoItinerary)
 
       if (job.keyword) setKeyword(job.keyword)
       setEvent({
         jobId,
         status: 'done',
         progress: 100,
-        message: note ?? '已載入先前的查詢結果',
+        message: note ?? t.tripPlanner.loadedPrevious,
       })
       setItinerary(job.itinerary.data)
       setFromCache(true)
@@ -180,7 +178,7 @@ export function TripPlanner() {
       if (activeJobRef.current !== jobId) return // user started something else
 
       if (job?.itinerary?.data) {
-        settleDone(jobId, job.itinerary.data, '連線曾中斷，已取回完成的行程')
+        settleDone(jobId, job.itinerary.data, t.tripPlanner.recoveredAfterDrop)
         return
       }
       setEvent({
@@ -189,8 +187,8 @@ export function TripPlanner() {
         progress: 100,
         error:
           job === null
-            ? '與伺服器的連線中斷'
-            : '與伺服器的連線中斷，行程可能仍在產生中——稍後可從「先前的查詢」接續。',
+            ? t.tripPlanner.connectionLost
+            : t.tripPlanner.connectionLostResumable,
       })
     },
     [settleDone],
@@ -224,7 +222,7 @@ export function TripPlanner() {
         if (source.readyState !== EventSource.CLOSED) {
           setEvent((current) =>
             current && current.status !== 'done'
-              ? { ...current, message: '連線中斷，正在重新連線…' }
+              ? { ...current, message: t.tripPlanner.reconnecting }
               : current,
           )
           return
@@ -241,9 +239,7 @@ export function TripPlanner() {
     stopStream()
     activeJobRef.current = null
     setEvent(null)
-    setNotice(
-      '已停止追蹤這次規劃。後端仍會把它跑完，稍後可從「先前的查詢」開啟。',
-    )
+    setNotice(t.tripPlanner.cancelledNotice)
   }, [stopStream])
 
   /** Reattach to a query that was still running when the page was left. */
@@ -264,13 +260,13 @@ export function TripPlanner() {
           jobId: '',
           status: 'failed',
           progress: 100,
-          error: '此紀錄已不存在',
+          error: t.tripPlanner.recordGoneShort,
         })
         return
       }
 
       if (job.itinerary?.data) {
-        settleDone(entry.jobId, job.itinerary.data, '已載入先前的查詢結果')
+        settleDone(entry.jobId, job.itinerary.data, t.tripPlanner.loadedPrevious)
         return
       }
       if (job.status === 'failed') {
@@ -279,7 +275,7 @@ export function TripPlanner() {
           jobId: entry.jobId,
           status: 'failed',
           progress: 100,
-          error: job.error ?? '這次規劃失敗了',
+          error: job.error ?? t.tripPlanner.planFailed,
         })
         return
       }
@@ -288,7 +284,7 @@ export function TripPlanner() {
         jobId: entry.jobId,
         status: (job.status as TripStatus) ?? 'pending',
         progress: job.progress ?? 0,
-        message: '已重新連上先前的規劃',
+        message: t.tripPlanner.reconnectedPrevious,
       })
       attachStream(entry.jobId)
     },
@@ -300,7 +296,7 @@ export function TripPlanner() {
   useEffect(() => {
     const jobId = new URLSearchParams(window.location.search).get('job')
     if (jobId) {
-      void loadStored(jobId, '已載入分享的行程')
+      void loadStored(jobId, t.tripPlanner.loadedShared)
       return
     }
     setResumable(findResumableTrip())
@@ -343,7 +339,8 @@ export function TripPlanner() {
             ...(hasTripPreferences(preferences) ? { preferences } : {}),
           }),
         })
-        if (!response.ok) throw new Error(`建立任務失敗 (${response.status})`)
+        if (!response.ok)
+          throw new Error(fmt(t.tripPlanner.createJobFailed, { status: response.status }))
 
         const { jobId, cached } = (await response.json()) as {
           jobId: string
@@ -354,13 +351,13 @@ export function TripPlanner() {
           // The job already finished, so its SSE stream will never emit; read
           // the stored result directly.
           const job = await fetchJob(jobId)
-          if (!job?.itinerary?.data) throw new Error('讀取快取結果失敗')
+          if (!job?.itinerary?.data) throw new Error(t.tripPlanner.readCacheFailed)
           setItinerary(job.itinerary.data)
           setEvent({
             jobId,
             status: 'done',
             progress: 100,
-            message: '已套用先前相同關鍵字的結果（快取）',
+            message: t.tripPlanner.appliedCache,
           })
           setFromCache(true)
           setHistory(addTripHistory({ jobId, keyword: trimmed, done: true }))
@@ -371,7 +368,7 @@ export function TripPlanner() {
         // Recorded before the first event arrives: if the tab is closed or
         // refreshed mid-run, this entry is what makes the job findable again.
         setHistory(addTripHistory({ jobId, keyword: trimmed, done: false }))
-        setEvent({ jobId, status: 'pending', progress: 0, message: '已排入佇列' })
+        setEvent({ jobId, status: 'pending', progress: 0, message: t.tripPlanner.queued })
         attachStream(jobId)
       } catch (error) {
         setEvent({
@@ -401,7 +398,7 @@ export function TripPlanner() {
       setKeyword(entry.keyword)
       const ok = await loadStored(
         entry.jobId,
-        `已載入先前的查詢結果（${timeAgo(entry.createdAt)}）`,
+        fmt(t.tripPlanner.loadedPreviousAt, { ago: timeAgo(entry.createdAt, locale) }),
       )
       // The backend no longer has this job — drop the dead entry.
       if (!ok) setHistory(removeTripHistory(entry.jobId))
@@ -446,25 +443,28 @@ export function TripPlanner() {
             className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-card/70 px-3.5 py-1.5 text-sm font-medium text-primary shadow-sm backdrop-blur transition-colors hover:border-primary/40"
           >
             <Compass className="h-3.5 w-3.5" />
-            探索行程
+            {t.nav.explore}
           </a>
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <LanguageToggle />
+            <ThemeToggle />
+          </div>
         </div>
 
         <div className="mt-8 text-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-card/70 px-4 py-2 text-primary shadow-sm backdrop-blur animate-in fade-in slide-in-from-bottom-2 duration-500">
             <Sparkles className="h-4 w-4" />
-            <span className="text-sm font-medium">AI 行程規劃</span>
+            <span className="text-sm font-medium">{t.tripPlanner.badge}</span>
           </div>
           <h1 className="mt-5 text-balance text-4xl font-bold md:text-5xl animate-in fade-in slide-in-from-bottom-3 duration-700">
             <span className="bg-gradient-to-r from-primary via-primary to-accent bg-clip-text text-transparent">
-              給我一個目的地，
+              {t.tripPlanner.titleLead}
             </span>
             <br className="md:hidden" />
-            <span className="text-foreground">帶你飛向完整行程</span>
+            <span className="text-foreground">{t.tripPlanner.titleRest}</span>
           </h1>
           <p className="mt-4 text-pretty text-muted-foreground animate-in fade-in slide-in-from-bottom-3 duration-700 [animation-delay:120ms] [animation-fill-mode:backwards]">
-            輸入關鍵字，AI 讀遍 30 篇旅遊文章，為你排出逐日可執行的旅程 ✈️
+            {t.tripPlanner.subtitle}
           </p>
         </div>
 
@@ -501,8 +501,8 @@ export function TripPlanner() {
               // Escape closes the dropdown without moving focus, so onFocus
               // will not fire again — clicking or typing has to reopen it.
               onClick={() => setHistoryOpen(true)}
-              placeholder="例如：大阪三天兩夜親子自由行"
-              aria-label="旅遊關鍵字"
+              placeholder={t.tripPlanner.placeholder}
+              aria-label={t.tripPlanner.keywordAria}
               aria-expanded={showHistoryMenu}
               aria-controls={showHistoryMenu ? 'trip-history-menu' : undefined}
               className="h-12 border-none bg-transparent text-lg shadow-none focus-visible:ring-0"
@@ -519,7 +519,7 @@ export function TripPlanner() {
               ) : (
                 <Wand2 className="mr-2 h-5 w-5" />
               )}
-              {running ? '規劃中…' : '出發'}
+              {running ? t.tripPlanner.planning : t.tripPlanner.depart}
             </Button>
           </div>
 
@@ -544,7 +544,7 @@ export function TripPlanner() {
         />
 
         <div className="mt-5 flex flex-wrap justify-center gap-2 animate-in fade-in duration-700 [animation-delay:300ms] [animation-fill-mode:backwards]">
-          {EXAMPLES.map((example) => (
+          {t.tripPlanner.examples.map((example) => (
             <button
               key={example.label}
               type="button"
@@ -567,7 +567,7 @@ export function TripPlanner() {
           <div className="mt-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm animate-in fade-in slide-in-from-bottom-2 duration-500">
             <span className="flex items-center gap-2 text-foreground">
               <PlugZap className="h-4 w-4 shrink-0 text-primary" />
-              上次的規劃「{resumable.keyword}」可能還在進行中
+              {fmt(t.tripPlanner.resumableRunning, { keyword: resumable.keyword })}
             </span>
             <div className="flex gap-2">
               <Button
@@ -576,7 +576,7 @@ export function TripPlanner() {
                 disabled={submitting}
                 onClick={() => void resume(resumable)}
               >
-                接續查看
+                {t.tripPlanner.resume}
               </Button>
               <Button
                 type="button"
@@ -587,7 +587,7 @@ export function TripPlanner() {
                   setResumable(null)
                 }}
               >
-                忽略
+                {t.tripPlanner.ignore}
               </Button>
             </div>
           </div>
@@ -609,7 +609,7 @@ export function TripPlanner() {
           <div className="mt-3 flex justify-end">
             <Button type="button" variant="ghost" size="sm" onClick={cancel}>
               <X className="mr-1.5 h-4 w-4" />
-              停止追蹤
+              {t.tripPlanner.stopTracking}
             </Button>
           </div>
         )}
@@ -624,14 +624,14 @@ export function TripPlanner() {
               onClick={() => void start(keyword, true)}
             >
               <RotateCcw className="mr-1.5 h-4 w-4" />
-              重試
+              {t.tripPlanner.retry}
             </Button>
           </div>
         )}
 
         {fromCache && itinerary && (
           <div className="mt-4 flex items-center justify-between rounded-xl border border-border bg-secondary/50 px-4 py-3 text-sm text-muted-foreground animate-in fade-in slide-in-from-bottom-2 duration-500">
-            <span>此行程來自先前相同關鍵字的結果。</span>
+            <span>{t.tripPlanner.fromCacheNote}</span>
             <Button
               type="button"
               variant="outline"
@@ -639,7 +639,7 @@ export function TripPlanner() {
               disabled={running || submitting}
               onClick={() => void start(keyword, true)}
             >
-              重新產生
+              {t.tripPlanner.regenerate}
             </Button>
           </div>
         )}

@@ -150,7 +150,9 @@ export function lodgingSearchLinks(
     },
     {
       partner: 'google_hotels',
-      label: 'Google 飯店',
+      // Product name — kept language-neutral so the affiliate deep-link layer
+      // stays a pure function (no locale threading through every call site).
+      label: 'Google Hotels',
       url: `https://www.google.com/travel/search?q=${q}&hl=zh-TW`,
     },
   ]

@@ -1,3 +1,5 @@
+import { fmt, getDictionary, type Locale } from './i18n'
+
 export type TripStatus =
   | 'pending'
   | 'planning'
@@ -57,10 +59,11 @@ export function distanceKm(
   return 6371 * 2 * Math.asin(Math.sqrt(h))
 }
 
-/** "約 800 公尺" below 1 km, otherwise "約 12.5 公里". */
-export function formatDistance(km: number): string {
-  if (km < 1) return `約 ${Math.round(km * 100) * 10} 公尺`
-  return `約 ${km >= 10 ? Math.round(km) : km.toFixed(1)} 公里`
+/** Localized "about 800 m" below 1 km, otherwise "about 12.5 km". */
+export function formatDistance(km: number, locale: Locale): string {
+  const t = getDictionary(locale)
+  if (km < 1) return fmt(t.units.aboutMeters, { n: Math.round(km * 100) * 10 })
+  return fmt(t.units.aboutKm, { n: km >= 10 ? Math.round(km) : km.toFixed(1) })
 }
 
 /**
@@ -73,13 +76,15 @@ export function formatDistance(km: number): string {
  */
 export function mapsSearchUrl(
   name: string,
-  address?: string | null,
-  destination?: string,
+  address: string | null | undefined,
+  destination: string | undefined,
+  locale: Locale,
 ): string {
   const parts = [name.trim(), address?.trim() || destination?.trim() || '']
   const query = parts.filter(Boolean).join(' ')
-  // hl opens the place page (reviews, labels, buttons) in Traditional Chinese.
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}&hl=zh-TW`
+  // hl opens the place page (reviews, labels, buttons) in the active language.
+  const hl = locale === 'en' ? 'en' : 'zh-TW'
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}&hl=${hl}`
 }
 
 export type Itinerary = {
@@ -99,13 +104,14 @@ export type Itinerary = {
   references: Array<{ title: string; url: string }>
 }
 
-export const TRIP_STAGES: Array<{ status: TripStatus; label: string }> = [
-  { status: 'planning', label: '分解關鍵字' },
-  { status: 'searching', label: '搜尋網路' },
-  { status: 'crawling', label: '抓取文章' },
-  { status: 'composing', label: 'AI 整理行程' },
-  { status: 'done', label: '完成' },
-]
+/** Pipeline stages in order; labels resolve via `t.tripStages[status]`. */
+export const TRIP_STAGE_ORDER = [
+  'planning',
+  'searching',
+  'crawling',
+  'composing',
+  'done',
+] as const satisfies readonly TripStatus[]
 
 export function apiBaseUrl() {
   return process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:33000'
@@ -144,26 +150,23 @@ export const EMPTY_TRIP_PREFERENCES: TripPreferences = {
   avoid: [],
 }
 
-export const COMPANION_OPTIONS: { value: TripCompanions; label: string }[] = [
-  { value: 'solo', label: '一個人' },
-  { value: 'couple', label: '情侶' },
-  { value: 'family', label: '親子' },
-  { value: 'friends', label: '朋友' },
-  { value: 'parents', label: '長輩同行' },
-  { value: 'group', label: '團體' },
+// Option values only; labels resolve via `t.tripPreferences.*Options[value]`.
+export const COMPANION_VALUES: TripCompanions[] = [
+  'solo',
+  'couple',
+  'family',
+  'friends',
+  'parents',
+  'group',
 ]
 
-export const PACE_OPTIONS: { value: TripPace; label: string }[] = [
-  { value: 'relaxed', label: '悠閒' },
-  { value: 'balanced', label: '適中' },
-  { value: 'packed', label: '緊湊' },
-]
+export const PACE_VALUES: TripPace[] = ['relaxed', 'balanced', 'packed']
 
-export const BUDGET_OPTIONS: { value: TripBudget; label: string }[] = [
-  { value: 'budget', label: '經濟' },
-  { value: 'moderate', label: '中等' },
-  { value: 'comfort', label: '舒適' },
-  { value: 'luxury', label: '奢華' },
+export const BUDGET_VALUES: TripBudget[] = [
+  'budget',
+  'moderate',
+  'comfort',
+  'luxury',
 ]
 
 /** Quick-pick day counts; any other value is still allowed via the number field. */

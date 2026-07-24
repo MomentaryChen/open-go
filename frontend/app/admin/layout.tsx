@@ -1,9 +1,11 @@
 import type { Metadata } from 'next'
 import { Toaster } from '@/components/ui/sonner'
 import { AdminNav } from '@/components/admin/admin-nav'
+import { getServerDictionary } from '@/lib/i18n/server'
 
-export const metadata: Metadata = {
-  title: '管理後台 | Travel Discovery',
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getServerDictionary()
+  return { title: t.admin.metaTitle }
 }
 
 export default function AdminLayout({

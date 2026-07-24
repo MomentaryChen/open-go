@@ -24,6 +24,8 @@ import {
   formatDateTime,
   formatDuration,
 } from '@/components/admin/job-status-badge'
+import { fmt } from '@/lib/i18n'
+import { useLanguage } from '@/lib/i18n/context'
 
 const ACTIVE_STATUSES = new Set([
   'pending',
@@ -34,6 +36,7 @@ const ACTIVE_STATUSES = new Set([
 ])
 
 export default function AdminJobDetailPage() {
+  const { t } = useLanguage()
   const params = useParams<{ id: string }>()
   const router = useRouter()
   const jobId = params.id
@@ -72,7 +75,7 @@ export default function AdminJobDetailPage() {
     setRetrying(true)
     try {
       const result = await retryJob(job.id)
-      toast.success('已建立新任務')
+      toast.success(t.admin.jobDetail.newJobCreated)
       router.push(`/admin/jobs/${result.jobId}`)
     } catch (error) {
       toast.error((error as Error).message)
@@ -81,8 +84,8 @@ export default function AdminJobDetailPage() {
     }
   }
 
-  if (loading) return <p className="text-sm text-muted-foreground">載入中…</p>
-  if (!job) return <p className="text-sm text-muted-foreground">找不到此任務</p>
+  if (loading) return <p className="text-sm text-muted-foreground">{t.common.loading}</p>
+  if (!job) return <p className="text-sm text-muted-foreground">{t.admin.jobDetail.notFound}</p>
 
   const fetched = job.documentStats.fetched ?? 0
   const failedDocs = job.documentStats.failed ?? 0
@@ -92,7 +95,7 @@ export default function AdminJobDetailPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" asChild aria-label="返回任務列表">
+          <Button variant="ghost" size="icon" asChild aria-label={t.admin.jobDetail.backToList}>
             <Link href="/admin/jobs">
               <ArrowLeft className="h-4 w-4" />
             </Link>
@@ -108,18 +111,18 @@ export default function AdminJobDetailPage() {
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => void refresh()}>
             <RefreshCw className="h-4 w-4" />
-            重新整理
+            {t.common.refresh}
           </Button>
           <Button size="sm" disabled={retrying} onClick={() => void handleRetry()}>
             <RotateCw className="h-4 w-4" />
-            {retrying ? '執行中…' : '重新執行'}
+            {retrying ? t.admin.jobDetail.retrying : t.admin.jobDetail.retry}
           </Button>
         </div>
       </div>
 
       {job.error && (
         <Card className="gap-2 border-destructive/40 bg-destructive/5 p-4">
-          <p className="text-sm font-medium text-destructive">失敗原因</p>
+          <p className="text-sm font-medium text-destructive">{t.admin.jobDetail.failReason}</p>
           <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-xs">
             {job.error}
           </pre>
@@ -133,46 +136,48 @@ export default function AdminJobDetailPage() {
         </div>
         <Progress value={job.progress} />
         <div className="grid gap-3 pt-1 text-sm sm:grid-cols-4">
-          <Field label="建立時間" value={formatDateTime(job.createdAt)} />
-          <Field label="最後更新" value={formatDateTime(job.updatedAt)} />
-          <Field label="耗時" value={formatDuration(job.durationMs)} />
-          <Field label="使用模型" value={job.itinerary?.model ?? '—'} />
+          <Field label={t.admin.jobDetail.createdAt} value={formatDateTime(job.createdAt)} />
+          <Field label={t.admin.jobDetail.updatedAt} value={formatDateTime(job.updatedAt)} />
+          <Field label={t.admin.jobDetail.duration} value={formatDuration(job.durationMs)} />
+          <Field label={t.admin.jobDetail.model} value={job.itinerary?.model ?? '—'} />
         </div>
       </Card>
 
       <Tabs defaultValue="documents">
         <TabsList>
           <TabsTrigger value="documents">
-            文件 ({job.documents.length})
+            {fmt(t.admin.jobDetail.tabDocuments, { n: job.documents.length })}
           </TabsTrigger>
-          <TabsTrigger value="queries">查詢 ({job.queries.length})</TabsTrigger>
-          <TabsTrigger value="itinerary">行程結果</TabsTrigger>
+          <TabsTrigger value="queries">
+            {fmt(t.admin.jobDetail.tabQueries, { n: job.queries.length })}
+          </TabsTrigger>
+          <TabsTrigger value="itinerary">{t.admin.jobDetail.tabItinerary}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="documents" className="space-y-3">
           <div className="flex flex-wrap gap-2 text-xs">
             <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
-              成功 {fetched}
+              {fmt(t.admin.jobDetail.docFetched, { n: fetched })}
             </Badge>
             <Badge variant="secondary" className="bg-destructive/15 text-destructive">
-              失敗 {failedDocs}
+              {fmt(t.admin.jobDetail.docFailed, { n: failedDocs })}
             </Badge>
-            <Badge variant="secondary">待處理 {pendingDocs}</Badge>
+            <Badge variant="secondary">{fmt(t.admin.jobDetail.docPending, { n: pendingDocs })}</Badge>
           </div>
           <div className="rounded-lg border bg-background">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>標題 / 網址</TableHead>
-                  <TableHead className="w-24">狀態</TableHead>
-                  <TableHead className="hidden w-40 lg:table-cell">抓取時間</TableHead>
+                  <TableHead>{t.admin.jobDetail.docColTitle}</TableHead>
+                  <TableHead className="w-24">{t.admin.jobDetail.docColStatus}</TableHead>
+                  <TableHead className="hidden w-40 lg:table-cell">{t.admin.jobDetail.docColFetchedAt}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {job.documents.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={3} className="h-20 text-center text-muted-foreground">
-                      尚無文件
+                      {t.admin.jobDetail.docEmpty}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -220,17 +225,17 @@ export default function AdminJobDetailPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>查詢字串</TableHead>
-                  <TableHead className="hidden w-40 md:table-cell">意圖</TableHead>
-                  <TableHead className="w-20">語言</TableHead>
-                  <TableHead className="w-20 text-right">結果數</TableHead>
+                  <TableHead>{t.admin.jobDetail.queryColText}</TableHead>
+                  <TableHead className="hidden w-40 md:table-cell">{t.admin.jobDetail.queryColIntent}</TableHead>
+                  <TableHead className="w-20">{t.admin.jobDetail.queryColLang}</TableHead>
+                  <TableHead className="w-20 text-right">{t.admin.jobDetail.queryColResults}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {job.queries.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={4} className="h-20 text-center text-muted-foreground">
-                      尚無查詢（規劃階段未完成）
+                      {t.admin.jobDetail.queryEmpty}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -256,11 +261,11 @@ export default function AdminJobDetailPage() {
           {job.itinerary ? (
             <Card className="gap-3 p-4">
               <div>
-                <p className="text-xs text-muted-foreground">摘要</p>
+                <p className="text-xs text-muted-foreground">{t.admin.jobDetail.summary}</p>
                 <p className="mt-1 text-sm">{job.itinerary.summary}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">原始輸出</p>
+                <p className="text-xs text-muted-foreground">{t.admin.jobDetail.rawOutput}</p>
                 <pre className="mt-1 max-h-[32rem] overflow-auto rounded-md bg-muted p-3 font-mono text-xs">
                   {JSON.stringify(job.itinerary.data, null, 2)}
                 </pre>
@@ -268,7 +273,7 @@ export default function AdminJobDetailPage() {
             </Card>
           ) : (
             <Card className="p-8 text-center text-sm text-muted-foreground">
-              此任務尚未產生行程
+              {t.admin.jobDetail.itineraryEmpty}
             </Card>
           )}
         </TabsContent>
