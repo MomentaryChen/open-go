@@ -25,6 +25,14 @@ export class BrowserFetcherService implements OnModuleDestroy {
     return tripConfig.crawlBrowserFallback;
   }
 
+  /** Snapshot for the admin health panel — does not launch the browser. */
+  status() {
+    return {
+      enabled: tripConfig.crawlBrowserFallback,
+      launched: Boolean(this.browser?.isConnected()),
+    };
+  }
+
   /**
    * Fully rendered HTML of the page, or null when the fallback is disabled or
    * the navigation fails. Never throws — the caller treats null as a miss.

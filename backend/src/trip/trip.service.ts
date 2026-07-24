@@ -28,6 +28,10 @@ import {
   preferencesCacheKey,
   type TripPreferences,
 } from './trip-preferences';
+import {
+  TripCancelledError,
+  isTripCancelledError,
+} from './trip-cancelled.error';
 import { SearchHit, TripProgressEvent, TripStatus } from './trip.types';
 import type { Prisma } from '@prisma/client';
 
@@ -35,6 +39,8 @@ import type { Prisma } from '@prisma/client';
 const RESUMABLE_STATUSES = ['pending'];
 /** Caught mid-pipeline by a restart; cannot be continued. */
 const IN_FLIGHT_STATUSES = ['planning', 'searching', 'crawling', 'composing'];
+/** Non-terminal statuses a live job may hold; cancel/fail/publish only touch these. */
+const ACTIVE_STATUSES = [...RESUMABLE_STATUSES, ...IN_FLIGHT_STATUSES];
 /** A pending job older than this is abandoned rather than resumed on boot. */
 const RESUME_WINDOW_MS = 60 * 60 * 1000;
 
@@ -166,7 +172,9 @@ export class TripService implements OnModuleInit {
     });
     // Admission is the queue's call, not ours: it may start immediately or
     // hold the job until a slot frees.
-    this.queue.enqueue(job.id, () => this.run(job.id, keyword, preferences));
+    this.queue.enqueue(job.id, (signal) =>
+      this.run(job.id, keyword, preferences, signal),
+    );
 
     return { job, cached: false };
   }
@@ -212,8 +220,8 @@ export class TripService implements OnModuleInit {
 
       for (const job of resumable) {
         const preferences = normalizePreferences(job.preferences);
-        this.queue.enqueue(job.id, () =>
-          this.run(job.id, job.keyword, preferences),
+        this.queue.enqueue(job.id, (signal) =>
+          this.run(job.id, job.keyword, preferences, signal),
         );
       }
 
@@ -373,20 +381,30 @@ export class TripService implements OnModuleInit {
     jobId: string,
     keyword: string,
     preferences: TripPreferences = EMPTY_PREFERENCES,
+    signal: AbortSignal = new AbortController().signal,
   ) {
     try {
+      this.throwIfCancelled(signal);
       const cfg = await this.resolveRuntimeConfig();
-      const plan = await this.runPlanning(jobId, keyword, preferences);
-      const urls = await this.runSearch(jobId, plan, cfg);
-      const fetched = await this.runCrawl(jobId, urls, cfg);
-      await this.runCompose(jobId, keyword, plan, fetched, preferences);
+      const plan = await this.runPlanning(jobId, keyword, preferences, signal);
+      const urls = await this.runSearch(jobId, plan, cfg, signal);
+      const fetched = await this.runCrawl(jobId, urls, cfg, signal);
+      this.throwIfCancelled(signal);
+      await this.runCompose(jobId, keyword, plan, fetched, preferences, signal);
     } catch (error) {
+      if (isTripCancelledError(error) || signal.aborted) {
+        await this.ensureCancelled(jobId);
+        return;
+      }
       const message = (error as Error).message;
       this.logger.error(`Trip job ${jobId} failed: ${message}`);
-      await this.prisma.tripJob.update({
-        where: { id: jobId },
+      // Conditional write: a concurrent cancel owns the terminal state.
+      const updated = await this.prisma.tripJob.updateMany({
+        where: { id: jobId, status: { in: ACTIVE_STATUSES } },
         data: { status: 'failed', error: message, message: '行程產生失敗' },
       });
+      if (updated.count === 0) return;
+
       this.events.emit({
         jobId,
         status: 'failed',
@@ -397,14 +415,56 @@ export class TripService implements OnModuleInit {
     }
   }
 
+  private throwIfCancelled(signal: AbortSignal) {
+    if (signal.aborted) throw new TripCancelledError();
+  }
+
+  /**
+   * Idempotent: admin cancel writes this first for a fast UI update; the
+   * pipeline also calls it when the AbortSignal fires mid-stage.
+   */
+  private async ensureCancelled(jobId: string) {
+    const current = await this.prisma.tripJob.findUnique({
+      where: { id: jobId },
+      select: { status: true, progress: true },
+    });
+    if (!current) return;
+    if (
+      current.status === 'cancelled' ||
+      current.status === 'done' ||
+      current.status === 'failed'
+    ) {
+      return;
+    }
+
+    await this.prisma.tripJob.update({
+      where: { id: jobId },
+      data: {
+        status: 'cancelled',
+        error: 'Cancelled by admin',
+        message: 'Cancelled',
+      },
+    });
+    this.events.emit({
+      jobId,
+      status: 'cancelled',
+      progress: current.progress,
+      message: 'Cancelled',
+      error: 'Cancelled by admin',
+    });
+  }
+
   private async runPlanning(
     jobId: string,
     keyword: string,
     preferences: TripPreferences,
+    signal: AbortSignal,
   ) {
+    this.throwIfCancelled(signal);
     await this.publish(jobId, 'planning', 5, '正在分解關鍵字…');
 
     const plan = await this.planner.plan(keyword, preferences);
+    this.throwIfCancelled(signal);
     await this.prisma.tripQuery.createMany({
       data: plan.queries.map((query) => ({
         jobId,
@@ -427,7 +487,9 @@ export class TripService implements OnModuleInit {
     jobId: string,
     plan: TripPlan,
     cfg: TripRuntimeConfig,
+    signal: AbortSignal,
   ) {
+    this.throwIfCancelled(signal);
     await this.publish(jobId, 'searching', 15, '正在搜尋網路資料…');
 
     const collected = new Map<string, SearchHit>();
@@ -444,6 +506,7 @@ export class TripService implements OnModuleInit {
     // language's queries claim every slot before another's ever run.
     const queries = interleaveByLanguage(plan.queries);
     for (const [index, query] of queries.entries()) {
+      this.throwIfCancelled(signal);
       if (collected.size >= cfg.targetDocuments) break;
       if (index > 0) await this.search.throttle();
 
@@ -521,7 +584,9 @@ export class TripService implements OnModuleInit {
     jobId: string,
     urls: string[],
     cfg: TripRuntimeConfig,
+    signal: AbortSignal,
   ) {
+    this.throwIfCancelled(signal);
     const reused = await this.reuseFetchedDocuments(jobId, urls, cfg);
     const pending = urls.filter((url) => !reused.has(url));
 
@@ -538,6 +603,7 @@ export class TripService implements OnModuleInit {
     let ok = reused.size;
 
     await this.crawler.crawlAll(pending, async (result) => {
+      this.throwIfCancelled(signal);
       done += 1;
       if (result.ok) ok += 1;
 
@@ -566,7 +632,7 @@ export class TripService implements OnModuleInit {
         crawled: done,
         total: urls.length,
       });
-    }, { concurrency: cfg.crawlConcurrency });
+    }, { concurrency: cfg.crawlConcurrency, signal });
 
     await this.publish(
       jobId,
@@ -658,7 +724,9 @@ export class TripService implements OnModuleInit {
       content: string | null;
     }>,
     preferences: TripPreferences,
+    signal: AbortSignal,
   ) {
+    this.throwIfCancelled(signal);
     await this.publish(
       jobId,
       'composing',
@@ -676,6 +744,9 @@ export class TripService implements OnModuleInit {
       preferences,
     );
 
+    // Compose is the longest wait; cancel during it must not flip the row to done.
+    this.throwIfCancelled(signal);
+
     await this.prisma.tripItinerary.create({
       data: {
         jobId,
@@ -685,12 +756,15 @@ export class TripService implements OnModuleInit {
       },
     });
 
-    await this.ingestItineraryPois(jobId, plan, itinerary);
-
-    await this.prisma.tripJob.update({
-      where: { id: jobId },
+    const updated = await this.prisma.tripJob.updateMany({
+      where: { id: jobId, status: { in: ACTIVE_STATUSES } },
       data: { status: 'done', progress: 100, message: '行程已完成' },
     });
+    if (updated.count === 0) {
+      throw new TripCancelledError();
+    }
+
+    await this.ingestItineraryPois(jobId, plan, itinerary);
 
     this.events.emit({
       jobId,
@@ -769,10 +843,15 @@ export class TripService implements OnModuleInit {
     progress: number,
     message: string,
   ) {
-    await this.prisma.tripJob.update({
-      where: { id: jobId },
+    // Conditional write so a concurrent cancel cannot be revived to an
+    // in-progress status by a late publish.
+    const updated = await this.prisma.tripJob.updateMany({
+      where: { id: jobId, status: { in: ACTIVE_STATUSES } },
       data: { status, progress, message },
     });
+    if (updated.count === 0) {
+      throw new TripCancelledError();
+    }
 
     const event: TripProgressEvent = { jobId, status, progress, message };
     this.events.emit(event);

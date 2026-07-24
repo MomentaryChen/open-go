@@ -16,7 +16,7 @@ export class TripEventsService {
 
   emit(event: TripProgressEvent) {
     this.subject(event.jobId).next(event);
-    if (event.status === 'done' || event.status === 'failed') {
+    if (event.status === 'done' || event.status === 'failed' || event.status === 'cancelled') {
       this.complete(event.jobId);
     }
   }

@@ -19,6 +19,7 @@ import {
   type HostOverrideAction,
 } from '../trip/host-policy.service';
 import { AdminAnalyticsService } from './admin-analytics.service';
+import { AdminHealthService } from './admin-health.service';
 import { AdminJobsService } from './admin-jobs.service';
 
 /** A job with no progress for this long is treated as stranded by a restart. */
@@ -32,10 +33,20 @@ export class AdminController {
   constructor(
     private readonly jobs: AdminJobsService,
     private readonly analytics: AdminAnalyticsService,
+    private readonly health: AdminHealthService,
     private readonly retention: RetentionService,
     private readonly affiliateConfig: AffiliateConfigService,
     private readonly hostPolicy: HostPolicyService,
   ) {}
+
+  /**
+   * One-glance system health: DB, Playwright browsers, LLM keys, queue depth,
+   * and last-24h job success rate. First stop when jobs fail at scale.
+   */
+  @Get('health')
+  systemHealth() {
+    return this.health.check();
+  }
 
   @Get('jobs')
   listJobs(
@@ -106,6 +117,12 @@ export class AdminController {
   @Post('jobs/:id/retry')
   retryJob(@Param('id') id: string) {
     return this.jobs.retry(id);
+  }
+
+  /** Stops a queued or running job; keeps its history for inspection / retry. */
+  @Post('jobs/:id/cancel')
+  cancelJob(@Param('id') id: string) {
+    return this.jobs.cancel(id);
   }
 
   @Delete('jobs/:id')

@@ -87,6 +87,7 @@ pnpm dev:frontend
 - `GET /trips/:id/documents` (crawled source documents)
 - `POST /affiliate/events` (public CTA funnel ingest: impression / click / redirect)
 - `GET/POST /settings`, `GET/PATCH/DELETE /settings/:key` (admin-only, `x-admin-key` header)
+- `GET /ops/health` (admin-only system health: DB, browsers, LLM keys, queue, 24h success rate)
 
 ## AI trip planning
 
@@ -140,6 +141,11 @@ that is invalidated on every write). The settings page also has dedicated cards 
 **Pipeline tuning** (search / crawl / cache / queue concurrency) and **LLM model**
 selection so the common `trip.*` knobs are not buried only in the key/value table.
 
+Opening `/admin` lands on **System health** (`/admin/health`, `GET /ops/health`): database
+latency, Playwright search/crawl browser readiness (including a cached Chromium probe),
+Gemini/Anthropic API key presence for the active provider, live queue `running`/`queued`
+counts, and last-24h job success rate. Use this first when jobs fail at scale.
+
 The **Jobs** page (`/admin/jobs`) lists trip-generation runs with status/keyword filters.
 After an outage leaves a wave of failures, filter to `Failed` (and optionally a keyword)
 then use **Retry matching** / **Delete matching** — each call acts on up to 100 filtered
@@ -153,6 +159,11 @@ httpOnly cookie (a salted SHA-256 digest — the plaintext never reaches the bro
 server routes that forward to the backend with an `x-admin-key` header, so the shared
 secret also never leaves the server. The backend guards `/settings` with the same header
 and fails closed when `ADMIN_PASSWORD` is unset.
+
+The jobs console (`/admin/jobs`) can cancel a queued or in-flight trip job without deleting
+it: `POST /ops/jobs/:id/cancel` drops the job from the backlog or signals the running
+pipeline to stop at the next stage/crawl checkpoint, then marks the row `cancelled` so it
+leaves the active list but remains available to retry or inspect.
 
 Keyword analytics at `/admin/keywords` shows demand, failure rate, content gaps, crawl-host
 health, and a top-N failure-reason panel grouped from existing `TripJob.error` text

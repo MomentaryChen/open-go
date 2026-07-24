@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { TripEventsService } from '../trip/trip-events.service';
 import { TripQueueService } from '../trip/trip-queue.service';
 import { TripService } from '../trip/trip.service';
 import { normalizePreferences } from '../trip/trip-preferences';
@@ -44,6 +45,7 @@ export class AdminJobsService {
     private readonly prisma: PrismaService,
     private readonly trips: TripService,
     private readonly queue: TripQueueService,
+    private readonly events: TripEventsService,
   ) {}
 
   private buildWhere(status?: string, keyword?: string): Prisma.TripJobWhereInput {
@@ -163,9 +165,58 @@ export class AdminJobsService {
     return { jobId: created.id, keyword: created.keyword, status: created.status };
   }
 
+  /**
+   * Stops a queued or in-flight job without deleting its history. Queued jobs
+   * are dropped from the backlog; running ones receive an AbortSignal and exit
+   * at the next pipeline checkpoint. Stranded active rows (restart leftovers)
+   * are still marked cancelled so they leave the "in progress" lists.
+   */
+  async cancel(jobId: string) {
+    const job = await this.prisma.tripJob.findUnique({ where: { id: jobId } });
+    if (!job) throw new NotFoundException(`Trip job ${jobId} not found`);
+    if (!ACTIVE_STATUSES.includes(job.status)) {
+      throw new BadRequestException(
+        `Job ${jobId} is already ${job.status} and cannot be cancelled`,
+      );
+    }
+
+    const queueResult = this.queue.cancel(jobId);
+
+    // Conditional update so a job that finishes between the read above and
+    // this write cannot be rewritten from done/failed into cancelled.
+    const updated = await this.prisma.tripJob.updateMany({
+      where: { id: jobId, status: { in: ACTIVE_STATUSES } },
+      data: {
+        status: 'cancelled',
+        error: 'Cancelled by admin',
+        message: 'Cancelled',
+      },
+    });
+    if (updated.count === 0) {
+      throw new BadRequestException(
+        `Job ${jobId} finished before it could be cancelled`,
+      );
+    }
+
+    this.events.emit({
+      jobId,
+      status: 'cancelled',
+      progress: job.progress,
+      message: 'Cancelled',
+      error: 'Cancelled by admin',
+    });
+
+    this.logger.log(
+      `Cancelled job ${jobId} ("${job.keyword}"); queue=${queueResult}`,
+    );
+    return { ok: true, status: 'cancelled' as const, queue: queueResult };
+  }
+
   async remove(jobId: string) {
     const job = await this.prisma.tripJob.findUnique({ where: { id: jobId } });
     if (!job) throw new NotFoundException(`Trip job ${jobId} not found`);
+    // Stop in-process work so a deleted job does not keep writing to missing rows.
+    this.queue.cancel(jobId);
     await this.prisma.tripJob.delete({ where: { id: jobId } });
     return { ok: true };
   }

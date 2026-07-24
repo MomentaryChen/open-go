@@ -32,6 +32,13 @@ import { TripService } from './trip.service';
     TripQueueService,
     TripService,
   ],
-  exports: [TripService, TripQueueService, HostPolicyService],
+  exports: [
+    TripService,
+    TripQueueService,
+    TripEventsService,
+    GoogleSearchProvider,
+    BrowserFetcherService,
+    HostPolicyService,
+  ],
 })
 export class TripModule {}

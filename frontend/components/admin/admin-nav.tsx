@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
+  Activity,
   Home,
   ListChecks,
   LogOut,
@@ -18,6 +19,7 @@ import { adminLogout } from '@/lib/admin'
 import { cn } from '@/lib/utils'
 
 const NAV_ITEMS = [
+  { href: '/admin/health', key: 'health', icon: Activity },
   { href: '/admin/jobs', key: 'jobs', icon: ListChecks },
   { href: '/admin/keywords', key: 'keywords', icon: TrendingUp },
   { href: '/admin/affiliate', key: 'affiliate', icon: ShoppingBag },

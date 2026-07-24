@@ -251,6 +251,16 @@ export function retryJob(id: string) {
   )
 }
 
+export function cancelJob(id: string) {
+  return request<{
+    ok: boolean
+    status: 'cancelled'
+    queue: 'queued' | 'running' | 'not_found'
+  }>(`/api/admin/ops/jobs/${encodeURIComponent(id)}/cancel`, {
+    method: 'POST',
+  })
+}
+
 export function deleteJob(id: string) {
   return request<{ ok: boolean }>(
     `/api/admin/ops/jobs/${encodeURIComponent(id)}`,
@@ -495,6 +505,53 @@ export function runRetention() {
   return request<RetentionResult>('/api/admin/ops/retention/run', {
     method: 'POST',
   })
+}
+
+// ---------------------------------------------------------------------------
+// System health
+// ---------------------------------------------------------------------------
+
+export type HealthStatus = 'ok' | 'warn' | 'error'
+
+export type SystemHealth = {
+  status: HealthStatus
+  checkedAt: string
+  database: {
+    status: HealthStatus
+    latencyMs: number
+    detail?: string
+  }
+  browsers: {
+    status: HealthStatus
+    detail?: string
+    search: { enabled: boolean; launched: boolean }
+    crawlFallback: { enabled: boolean; launched: boolean }
+    chromium: {
+      available: boolean
+      version: string | null
+      detail?: string
+    }
+  }
+  llm: {
+    status: HealthStatus
+    detail?: string
+    activeProvider: string
+    activeModel: string
+    keys: { gemini: boolean; anthropic: boolean }
+  }
+  queue: { running: number; queued: number }
+  last24h: {
+    status: HealthStatus
+    detail?: string
+    total: number
+    done: number
+    failed: number
+    successRate: number | null
+  }
+}
+
+export function getSystemHealth() {
+  return request<SystemHealth>('/api/admin/ops/health')
 }
 
 export async function adminLogin(password: string) {

@@ -281,6 +281,7 @@ export const zh = {
     brand: 'Travel Discovery',
     sidebarTitle: '管理後台',
     nav: {
+      health: '系統健康',
       jobs: '任務監控',
       keywords: '關鍵字分析',
       affiliate: 'Affiliate 漏斗',
@@ -321,6 +322,7 @@ export const zh = {
       composing: '組合中',
       done: '完成',
       failed: '失敗',
+      cancelled: '已取消',
     },
 
     range: {
@@ -344,6 +346,7 @@ export const zh = {
         done: '完成',
         failed: '失敗',
         pending: '排隊中',
+        cancelled: '已取消',
       },
       markAllFailed: '全部標記為失敗',
       stat: {
@@ -382,6 +385,12 @@ export const zh = {
       empty: '沒有符合條件的任務',
       retry: '重新執行',
       retryAria: '重新執行 {keyword}',
+      cancel: '取消',
+      cancelAria: '取消 {keyword}',
+      cancelTitle: '取消任務「{keyword}」？',
+      cancelDescription:
+        '會在下一個檢查點停止 pipeline。任務會以「已取消」保留在歷史中，之後仍可重新執行或刪除。',
+      cancelled: '已取消「{keyword}」',
       deleteAria: '刪除 {keyword}',
       deleteTitle: '刪除任務「{keyword}」？',
       deleteDescription: '會一併刪除此任務的查詢、文件與行程結果，此操作無法復原。',
@@ -396,6 +405,8 @@ export const zh = {
       failReason: '失敗原因',
       retrying: '執行中…',
       retry: '重新執行',
+      cancelling: '取消中…',
+      cancel: '取消任務',
       backToList: '返回任務列表',
       openFrontend: '開啟前台',
       createdAt: '建立時間',
@@ -664,6 +675,50 @@ export const zh = {
       confirmRun: '執行清理',
       cleaned: '清理完成',
       cleanedDesc: '清除 {content} 筆內文、刪除 {jobs} 個任務、{cache} 筆過期快取',
+    },
+
+    health: {
+      title: '系統健康',
+      subtitle: '任務大面積失敗時先看這裡：資料庫、瀏覽器、LLM 金鑰、佇列與近 24 小時成功率',
+      overall: '整體狀態',
+      checkedAt: '檢查時間 {time}',
+      status: {
+        ok: '正常',
+        warn: '需注意',
+        error: '異常',
+      },
+      database: {
+        title: '資料庫',
+        latency: '延遲 {ms} ms',
+      },
+      browsers: {
+        title: 'Playwright／搜尋瀏覽器',
+        search: '搜尋瀏覽器',
+        crawl: '爬蟲後備瀏覽器',
+        chromium: 'Chromium',
+        enabled: '已啟用',
+        disabled: '已停用',
+        launched: '執行中',
+        idle: '尚未啟動',
+        available: '可用 {version}',
+        unavailable: '無法啟動',
+      },
+      llm: {
+        title: 'LLM API 金鑰',
+        active: '目前使用：{provider} · {model}',
+        configured: '已設定',
+        missing: '未設定',
+      },
+      queue: {
+        title: '佇列',
+        running: '執行中',
+        queued: '排隊中',
+      },
+      last24h: {
+        title: '近 24 小時成功率',
+        doneFailed: '成功 {done} · 失敗 {failed}',
+        noFinished: '尚無已完成任務',
+      },
     },
   },
 }
