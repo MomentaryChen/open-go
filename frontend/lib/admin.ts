@@ -335,12 +335,24 @@ export type ContentGap = {
   lastAt: string
 }
 
+export type HostOverride = 'allow' | 'deny' | null
+
 export type HostStat = {
   host: string
   attempts: number
   fetched: number
   successRate: number
   autoBlocked: boolean
+  override: HostOverride
+  allowMatch: boolean
+  denyMatch: boolean
+  staticBlocked: boolean
+  effectivelyBlocked: boolean
+}
+
+export type HostPolicy = {
+  allowlist: string[]
+  denylist: string[]
 }
 
 export type FailureReason = {
@@ -378,6 +390,24 @@ export function getContentGaps(days = 30, maxDocuments = 5) {
 
 export function getHostStats(days = 30) {
   return request<HostStat[]>(`/api/admin/ops/analytics/hosts?days=${days}`)
+}
+
+export function getHostPolicy() {
+  return request<HostPolicy>('/api/admin/ops/hosts/policy')
+}
+
+export function setHostOverride(
+  host: string,
+  action: 'allow' | 'deny' | 'clear',
+) {
+  return request<{
+    host: string
+    override: HostOverride
+    lists: HostPolicy
+  }>('/api/admin/ops/hosts/override', {
+    method: 'PUT',
+    body: JSON.stringify({ host, action }),
+  })
 }
 
 // ---------------------------------------------------------------------------

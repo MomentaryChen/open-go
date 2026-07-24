@@ -10,6 +10,7 @@ import { KeywordPlannerService } from './keyword-planner.service';
 import { DuckDuckGoSearchProvider } from './search/duckduckgo-search.provider';
 import { GoogleSearchProvider } from './search/google-search.provider';
 import { SearchService } from './search/search.service';
+import { HostPolicyService } from './host-policy.service';
 import { TripController } from './trip.controller';
 import { TripEventsService } from './trip-events.service';
 import { TripQueueService } from './trip-queue.service';
@@ -23,6 +24,7 @@ import { TripService } from './trip.service';
     CrawlerService,
     DuckDuckGoSearchProvider,
     GoogleSearchProvider,
+    HostPolicyService,
     ItineraryComposerService,
     KeywordPlannerService,
     SearchService,
@@ -36,6 +38,7 @@ import { TripService } from './trip.service';
     TripEventsService,
     GoogleSearchProvider,
     BrowserFetcherService,
+    HostPolicyService,
   ],
 })
 export class TripModule {}

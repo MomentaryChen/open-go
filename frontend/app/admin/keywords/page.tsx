@@ -29,6 +29,7 @@ import {
   getHostStats,
   getJobTrend,
   getKeywordStats,
+  setHostOverride,
   type ContentGap,
   type FailureReasons,
   type HostStat,
@@ -38,6 +39,7 @@ import {
 import { formatDateTime, formatPercent } from '@/components/admin/job-status-badge'
 import { bcp47, fmt } from '@/lib/i18n'
 import { useLanguage } from '@/lib/i18n/context'
+import { Input } from '@/components/ui/input'
 
 const RANGE_VALUES = ['7', '30', '90'] as const
 const RANGE_KEY: Record<string, 'd7' | 'd30' | 'd90'> = {
@@ -61,6 +63,8 @@ export default function AdminKeywordsPage() {
     reasons: [],
   })
   const [loading, setLoading] = useState(true)
+  const [hostBusy, setHostBusy] = useState<string | null>(null)
+  const [manualHost, setManualHost] = useState('')
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -88,6 +92,38 @@ export default function AdminKeywordsPage() {
   useEffect(() => {
     void refresh()
   }, [refresh])
+
+  const applyHostOverride = useCallback(
+    async (host: string, action: 'allow' | 'deny' | 'clear') => {
+      setHostBusy(`${host}:${action}`)
+      try {
+        await setHostOverride(host, action)
+        toast.success(
+          action === 'allow'
+            ? t.admin.keywords.hostAllowSaved
+            : action === 'deny'
+              ? t.admin.keywords.hostDenySaved
+              : t.admin.keywords.hostClearSaved,
+        )
+        await refresh()
+      } catch (error) {
+        toast.error((error as Error).message)
+      } finally {
+        setHostBusy(null)
+      }
+    },
+    [refresh, t],
+  )
+
+  const addManualHost = useCallback(
+    async (action: 'allow' | 'deny') => {
+      const host = manualHost.trim()
+      if (!host) return
+      await applyHostOverride(host, action)
+      setManualHost('')
+    },
+    [applyHostOverride, manualHost],
+  )
 
   const totalRuns = keywords.reduce((sum, row) => sum + row.total, 0)
   const problemKeywords = keywords.filter(
@@ -270,6 +306,41 @@ export default function AdminKeywordsPage() {
           <p className="text-sm text-muted-foreground">
             {t.admin.keywords.hostsIntro}
           </p>
+          <div className="flex flex-wrap items-end gap-2 rounded-lg border bg-background p-3">
+            <div className="min-w-56 flex-1 space-y-1">
+              <label className="text-xs text-muted-foreground" htmlFor="manual-host">
+                {t.admin.keywords.hostAddLabel}
+              </label>
+              <Input
+                id="manual-host"
+                value={manualHost}
+                onChange={(event) => setManualHost(event.target.value)}
+                placeholder={t.admin.keywords.hostAddPlaceholder}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    void addManualHost('deny')
+                  }
+                }}
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!manualHost.trim() || hostBusy !== null}
+              onClick={() => void addManualHost('allow')}
+            >
+              {t.admin.keywords.hostActionAllow}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!manualHost.trim() || hostBusy !== null}
+              onClick={() => void addManualHost('deny')}
+            >
+              {t.admin.keywords.hostActionDeny}
+            </Button>
+          </div>
           <div className="rounded-lg border bg-background">
             <Table>
               <TableHeader>
@@ -278,13 +349,14 @@ export default function AdminKeywordsPage() {
                   <TableHead className="w-24 text-right">{t.admin.keywords.hostsCol.attempts}</TableHead>
                   <TableHead className="w-24 text-right">{t.admin.keywords.hostsCol.success}</TableHead>
                   <TableHead className="w-28 text-right">{t.admin.keywords.hostsCol.successRate}</TableHead>
-                  <TableHead className="w-28">{t.admin.keywords.hostsCol.status}</TableHead>
+                  <TableHead className="w-36">{t.admin.keywords.hostsCol.status}</TableHead>
+                  <TableHead className="w-52 text-right">{t.admin.keywords.hostsCol.actions}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {hosts.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-20 text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="h-20 text-center text-muted-foreground">
                       {t.admin.keywords.hostsEmpty}
                     </TableCell>
                   </TableRow>
@@ -295,14 +367,65 @@ export default function AdminKeywordsPage() {
                       <TableCell className="text-right tabular-nums">{row.attempts}</TableCell>
                       <TableCell className="text-right tabular-nums">{row.fetched}</TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {formatPercent(row.successRate)}
+                        {row.attempts > 0 ? formatPercent(row.successRate) : '—'}
                       </TableCell>
                       <TableCell>
-                        {row.autoBlocked && (
-                          <Badge variant="secondary" className="bg-destructive/15 text-destructive">
-                            {t.admin.keywords.autoBlocked}
-                          </Badge>
-                        )}
+                        <div className="flex flex-wrap gap-1">
+                          {row.allowMatch && (
+                            <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-700">
+                              {t.admin.keywords.hostWhitelisted}
+                            </Badge>
+                          )}
+                          {row.denyMatch && (
+                            <Badge variant="secondary" className="bg-destructive/15 text-destructive">
+                              {t.admin.keywords.hostBlacklisted}
+                            </Badge>
+                          )}
+                          {row.autoBlocked && !row.allowMatch && (
+                            <Badge variant="secondary" className="bg-amber-500/15 text-amber-800">
+                              {t.admin.keywords.autoBlocked}
+                            </Badge>
+                          )}
+                          {row.staticBlocked && !row.allowMatch && !row.denyMatch && (
+                            <Badge variant="secondary">
+                              {t.admin.keywords.hostStaticBlocked}
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex flex-wrap justify-end gap-1">
+                          {row.override !== 'allow' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={hostBusy !== null}
+                              onClick={() => void applyHostOverride(row.host, 'allow')}
+                            >
+                              {t.admin.keywords.hostActionAllow}
+                            </Button>
+                          )}
+                          {row.override !== 'deny' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={hostBusy !== null}
+                              onClick={() => void applyHostOverride(row.host, 'deny')}
+                            >
+                              {t.admin.keywords.hostActionDeny}
+                            </Button>
+                          )}
+                          {row.override && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={hostBusy !== null}
+                              onClick={() => void applyHostOverride(row.host, 'clear')}
+                            >
+                              {t.admin.keywords.hostActionClear}
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))

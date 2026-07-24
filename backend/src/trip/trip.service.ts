@@ -14,6 +14,8 @@ import { STRUCTURED_LLM } from './llm/llm.types';
 import type { StructuredLlm } from './llm/llm.types';
 import { ItineraryComposerService } from './itinerary-composer.service';
 import type { Itinerary } from './itinerary-composer.service';
+import { isHostBlocked, STATIC_BLOCKED_HOSTS } from './host-policy';
+import { HostPolicyService } from './host-policy.service';
 import { KeywordPlannerService, TripPlan } from './keyword-planner.service';
 import { SearchService } from './search/search.service';
 import { TripEventsService } from './trip-events.service';
@@ -32,24 +34,6 @@ import {
 } from './trip-cancelled.error';
 import { SearchHit, TripProgressEvent, TripStatus } from './trip.types';
 import type { Prisma } from '@prisma/client';
-
-/**
- * Hosts that consistently reject the crawler (login walls, JS-only shells).
- * Confirmed by crawl history: facebook 0/7, youtube 0/5 fetched. Skipping them
- * at URL-selection time keeps all document slots for fetchable pages.
- */
-const BLOCKED_HOSTS = [
-  'facebook.com',
-  'instagram.com',
-  'youtube.com',
-  'youtu.be',
-  'tiktok.com',
-  'threads.com',
-  'threads.net',
-  'x.com',
-  'twitter.com',
-  'reddit.com',
-];
 
 /** Queued but never started — safe to run from the beginning after a restart. */
 const RESUMABLE_STATUSES = ['pending'];
@@ -117,6 +101,7 @@ export class TripService implements OnModuleInit {
     private readonly composer: ItineraryComposerService,
     private readonly ingestion: IngestionService,
     private readonly settings: SettingsService,
+    private readonly hostPolicy: HostPolicyService,
     @Inject(STRUCTURED_LLM) private readonly llm: StructuredLlm,
   ) {}
 
@@ -509,7 +494,12 @@ export class TripService implements OnModuleInit {
 
     const collected = new Map<string, SearchHit>();
     const perHost = new Map<string, number>();
-    const unreliableHosts = await this.loadUnreliableHosts();
+    const [unreliableHosts, policy] = await Promise.all([
+      this.loadUnreliableHosts(),
+      this.hostPolicy.getLists(),
+    ]);
+    const allowlist = new Set(policy.allowlist);
+    const denylist = new Set(policy.denylist);
     let degraded = false;
 
     // Interleave by language so the early-exit at targetDocuments can't let one
@@ -540,7 +530,16 @@ export class TripService implements OnModuleInit {
 
         const host = this.hostOf(hit.url);
         if (!host) continue;
-        if (this.isBlockedHost(host, unreliableHosts)) continue;
+        if (
+          isHostBlocked(host, {
+            allowlist,
+            denylist,
+            unreliable: unreliableHosts,
+            staticBlocked: STATIC_BLOCKED_HOSTS,
+          })
+        ) {
+          continue;
+        }
         const seenForHost = perHost.get(host) ?? 0;
         if (seenForHost >= cfg.maxDocumentsPerHost) continue;
 
@@ -860,7 +859,7 @@ export class TripService implements OnModuleInit {
 
   /**
    * Hosts the crawler has tried at least 3 times in the last 30 days without a
-   * single success — learned counterparts to the static BLOCKED_HOSTS list.
+   * single success — learned counterparts to STATIC_BLOCKED_HOSTS.
    */
   private async loadUnreliableHosts(): Promise<Set<string>> {
     try {
@@ -879,13 +878,6 @@ export class TripService implements OnModuleInit {
       );
       return new Set();
     }
-  }
-
-  private isBlockedHost(host: string, unreliable: Set<string>) {
-    if (unreliable.has(host)) return true;
-    return BLOCKED_HOSTS.some(
-      (blocked) => host === blocked || host.endsWith(`.${blocked}`),
-    );
   }
 
   private hostOf(url: string) {
