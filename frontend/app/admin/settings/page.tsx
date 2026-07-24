@@ -51,6 +51,7 @@ import {
   type SettingInput,
 } from '@/lib/admin'
 import { LlmSettingsCard } from '@/components/admin/llm-settings-card'
+import { PipelineSettingsCard } from '@/components/admin/pipeline-settings-card'
 import { SettingHistoryDialog } from '@/components/admin/setting-history-dialog'
 import { RetentionCard } from '@/components/admin/retention-card'
 import { bcp47, fmt } from '@/lib/i18n'
@@ -190,6 +191,8 @@ export default function AdminSettingsPage() {
           </Button>
         </div>
       </div>
+
+      <PipelineSettingsCard settings={settings} onSaved={refresh} />
 
       <LlmSettingsCard settings={settings} onSaved={refresh} />
 

@@ -8,9 +8,53 @@ import { ShareActions, ShareCta } from '@/components/share-actions'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { fmt } from '@/lib/i18n'
 import { getServerDictionary, getServerLocale } from '@/lib/i18n/server'
+import { siteUrl } from '@/lib/server-api'
+import type { Itinerary } from '@/lib/trip'
 import { getStoredTrip } from '@/lib/trip-server'
 
 type Params = { params: Promise<{ jobId: string }> }
+
+/**
+ * schema.org TouristTrip markup so search engines can read the itinerary as
+ * structured data instead of prose — the backbone of the trip pages' SEO.
+ * Only items with coordinates are listed; without geo an entry adds noise,
+ * not rich-result eligibility.
+ */
+function tripJsonLd(itinerary: Itinerary, url: string) {
+  const places = itinerary.days
+    .flatMap((day) => day.items)
+    .filter(
+      (item) => item.name && item.latitude != null && item.longitude != null,
+    )
+
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'TouristTrip',
+    name: itinerary.title,
+    description: itinerary.summary,
+    url,
+    provider: { '@type': 'Organization', name: 'OpenGo', url: siteUrl() },
+    itinerary: {
+      '@type': 'ItemList',
+      numberOfItems: places.length,
+      itemListElement: places.map((item, index) => ({
+        '@type': 'ListItem',
+        position: index + 1,
+        item: {
+          '@type': 'TouristAttraction',
+          name: item.name,
+          ...(item.description ? { description: item.description } : {}),
+          ...(item.address ? { address: item.address } : {}),
+          geo: {
+            '@type': 'GeoCoordinates',
+            latitude: item.latitude,
+            longitude: item.longitude,
+          },
+        },
+      })),
+    },
+  }
+}
 
 /** Trim to a length that survives the LINE / Facebook / Slack preview crop. */
 function preview(text: string, max = 160) {
@@ -73,8 +117,17 @@ export default async function SharedTripPage({ params }: Params) {
   const [trip, t] = await Promise.all([getStoredTrip(jobId), getServerDictionary()])
   if (!trip) notFound()
 
+  const jsonLd = tripJsonLd(trip.itinerary, `${siteUrl()}/trip/${jobId}`)
+
   return (
     <main className="min-h-screen bg-background">
+      <script
+        type="application/ld+json"
+        // `<` escaped so itinerary text can never close the script tag early.
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c'),
+        }}
+      />
       <div className="container mx-auto max-w-4xl px-4 py-10">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link

@@ -549,6 +549,11 @@ export class TripService implements OnModuleInit {
           content: result.content ?? null,
           contentHash: result.contentHash ?? null,
           status: result.ok ? 'fetched' : 'failed',
+          // Keep a short reason on failure so admin job detail can explain thin
+          // itineraries; clear on success so reused retries do not leave stale text.
+          error: result.ok
+            ? null
+            : (result.error ?? 'crawl failed').slice(0, 500),
           fetchedAt: new Date(),
         },
       });
@@ -629,6 +634,7 @@ export class TripService implements OnModuleInit {
           content: candidate.content,
           contentHash: candidate.contentHash,
           status: 'fetched',
+          error: null,
           fetchedAt: candidate.fetchedAt,
         },
       });
