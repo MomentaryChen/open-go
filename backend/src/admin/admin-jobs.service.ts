@@ -90,6 +90,7 @@ export class AdminJobsService {
             title: true,
             snippet: true,
             status: true,
+            error: true,
             fetchedAt: true,
           },
         },
