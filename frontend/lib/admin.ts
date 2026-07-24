@@ -252,6 +252,37 @@ export function failStuckJobs(olderThanMinutes: number) {
   )
 }
 
+export type JobBatchFilter = {
+  status?: string
+  keyword?: string
+  limit?: number
+}
+
+export function batchRetryJobs(filter: JobBatchFilter) {
+  return request<{
+    matched: number
+    retried: number
+    truncated: boolean
+    limit: number
+    jobs: Array<{ sourceId: string; jobId: string; keyword: string }>
+  }>('/api/admin/ops/jobs/batch-retry', {
+    method: 'POST',
+    body: JSON.stringify(filter),
+  })
+}
+
+export function batchDeleteJobs(filter: JobBatchFilter) {
+  return request<{
+    matched: number
+    deleted: number
+    truncated: boolean
+    limit: number
+  }>('/api/admin/ops/jobs/batch-delete', {
+    method: 'POST',
+    body: JSON.stringify(filter),
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Keyword analytics
 // ---------------------------------------------------------------------------
