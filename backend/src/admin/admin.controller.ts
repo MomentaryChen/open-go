@@ -14,7 +14,12 @@ import { AffiliateConfigService } from '../affiliate/affiliate-config.service';
 import type { AffiliateConfigInput } from '../affiliate/affiliate-config.service';
 import { RetentionService } from '../retention/retention.service';
 import { AdminGuard } from '../settings/admin.guard';
+import {
+  HostPolicyService,
+  type HostOverrideAction,
+} from '../trip/host-policy.service';
 import { AdminAnalyticsService } from './admin-analytics.service';
+import { AdminHealthService } from './admin-health.service';
 import { AdminJobsService } from './admin-jobs.service';
 
 /** A job with no progress for this long is treated as stranded by a restart. */
@@ -28,9 +33,20 @@ export class AdminController {
   constructor(
     private readonly jobs: AdminJobsService,
     private readonly analytics: AdminAnalyticsService,
+    private readonly health: AdminHealthService,
     private readonly retention: RetentionService,
     private readonly affiliateConfig: AffiliateConfigService,
+    private readonly hostPolicy: HostPolicyService,
   ) {}
+
+  /**
+   * One-glance system health: DB, Playwright browsers, LLM keys, queue depth,
+   * and last-24h job success rate. First stop when jobs fail at scale.
+   */
+  @Get('health')
+  systemHealth() {
+    return this.health.check();
+  }
 
   @Get('jobs')
   listJobs(
@@ -103,6 +119,12 @@ export class AdminController {
     return this.jobs.retry(id);
   }
 
+  /** Stops a queued or running job; keeps its history for inspection / retry. */
+  @Post('jobs/:id/cancel')
+  cancelJob(@Param('id') id: string) {
+    return this.jobs.cancel(id);
+  }
+
   @Delete('jobs/:id')
   deleteJob(@Param('id') id: string) {
     return this.jobs.remove(id);
@@ -113,6 +135,14 @@ export class AdminController {
     return this.analytics.keywords(
       this.parseInt(days, 30, 1, 365),
       this.parseInt(limit, 50, 1, 200),
+    );
+  }
+
+  @Get('analytics/failure-reasons')
+  failureReasons(@Query('days') days?: string, @Query('limit') limit?: string) {
+    return this.analytics.failureReasons(
+      this.parseInt(days, 30, 1, 365),
+      this.parseInt(limit, 10, 1, 50),
     );
   }
 
@@ -140,6 +170,37 @@ export class AdminController {
       this.parseInt(days, 30, 1, 365),
       this.parseInt(limit, 30, 1, 200),
     );
+  }
+
+  /** Manual allow / deny lists used by crawl URL selection. */
+  @Get('hosts/policy')
+  getHostPolicy() {
+    return this.hostPolicy.getLists();
+  }
+
+  /** Replace one or both host lists. Omitted fields are left unchanged. */
+  @Put('hosts/policy')
+  saveHostPolicy(
+    @Body() body?: { allowlist?: string[]; denylist?: string[] },
+  ) {
+    return this.hostPolicy.saveLists(body ?? {});
+  }
+
+  /**
+   * Set a single-host override: allow (whitelist), deny (blacklist), or clear.
+   * Used by the keywords → source hosts table actions.
+   */
+  @Put('hosts/override')
+  setHostOverride(@Body() body?: { host?: string; action?: string }) {
+    const host = body?.host;
+    const action = body?.action as HostOverrideAction | undefined;
+    if (!host || typeof host !== 'string') {
+      throw new BadRequestException('host is required');
+    }
+    if (action !== 'allow' && action !== 'deny' && action !== 'clear') {
+      throw new BadRequestException('action must be allow, deny, or clear');
+    }
+    return this.hostPolicy.setOverride(host, action);
   }
 
   @Get('analytics/affiliate')
