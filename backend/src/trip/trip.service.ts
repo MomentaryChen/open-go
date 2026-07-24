@@ -19,7 +19,15 @@ import { SearchService } from './search/search.service';
 import { TripEventsService } from './trip-events.service';
 import { TripQueueService } from './trip-queue.service';
 import { tripConfig } from './trip.config';
+import {
+  EMPTY_PREFERENCES,
+  hasAnyPreference,
+  normalizePreferences,
+  preferencesCacheKey,
+  type TripPreferences,
+} from './trip-preferences';
 import { SearchHit, TripProgressEvent, TripStatus } from './trip.types';
+import type { Prisma } from '@prisma/client';
 
 /**
  * Hosts that consistently reject the crawler (login walls, JS-only shells).
@@ -102,9 +110,13 @@ export class TripService implements OnModuleInit {
     };
   }
 
-  async createJob(keyword: string, forceRefresh = false) {
+  async createJob(
+    keyword: string,
+    preferences: TripPreferences = EMPTY_PREFERENCES,
+    forceRefresh = false,
+  ) {
     if (!forceRefresh) {
-      const cached = await this.findReusableJob(keyword);
+      const cached = await this.findReusableJob(keyword, preferences);
       if (cached) {
         this.logger.log(
           `Cache hit: reusing job ${cached.id} for keyword "${keyword}"`,
@@ -114,7 +126,17 @@ export class TripService implements OnModuleInit {
     }
 
     const job = await this.prisma.tripJob.create({
-      data: { keyword, status: 'pending', progress: 0, message: '已排入佇列' },
+      data: {
+        keyword,
+        // Store null for keyword-only jobs so legacy rows and no-preference
+        // jobs are indistinguishable (both normalize to EMPTY_PREFERENCES).
+        preferences: hasAnyPreference(preferences)
+          ? (preferences as unknown as Prisma.InputJsonValue)
+          : undefined,
+        status: 'pending',
+        progress: 0,
+        message: '已排入佇列',
+      },
     });
 
     this.events.emit({
@@ -125,7 +147,7 @@ export class TripService implements OnModuleInit {
     });
     // Admission is the queue's call, not ours: it may start immediately or
     // hold the job until a slot frees.
-    this.queue.enqueue(job.id, () => this.run(job.id, keyword));
+    this.queue.enqueue(job.id, () => this.run(job.id, keyword, preferences));
 
     return { job, cached: false };
   }
@@ -170,7 +192,10 @@ export class TripService implements OnModuleInit {
       }
 
       for (const job of resumable) {
-        this.queue.enqueue(job.id, () => this.run(job.id, job.keyword));
+        const preferences = normalizePreferences(job.preferences);
+        this.queue.enqueue(job.id, () =>
+          this.run(job.id, job.keyword, preferences),
+        );
       }
 
       this.logger.log(
@@ -183,12 +208,17 @@ export class TripService implements OnModuleInit {
   }
 
   /**
-   * Latest finished job for the same keyword within the cache TTL, if any.
-   * Keywords are compared whitespace- and case-insensitively ("京都 五日 賞楓"
-   * matches "京都五日賞楓"), so the match is done in JS over recent jobs
-   * rather than in SQL.
+   * Latest finished job for the same keyword *and* the same preferences within
+   * the cache TTL, if any. Keywords are compared whitespace- and
+   * case-insensitively ("京都 五日 賞楓" matches "京都五日賞楓"); preferences
+   * must match exactly (a different budget or extra must-visit place is a
+   * different trip), so the match is done in JS over recent jobs rather than in
+   * SQL.
    */
-  private async findReusableJob(keyword: string) {
+  private async findReusableJob(
+    keyword: string,
+    preferences: TripPreferences,
+  ) {
     const cacheTtlDays = await this.settings.getNumber(
       'trip.cacheTtlDays',
       tripConfig.cacheTtlDays,
@@ -197,6 +227,7 @@ export class TripService implements OnModuleInit {
 
     const since = new Date(Date.now() - cacheTtlDays * 24 * 60 * 60 * 1000);
     const target = this.keywordForms(keyword);
+    const targetPrefs = preferencesCacheKey(preferences);
     const candidates = await this.prisma.tripJob.findMany({
       where: {
         status: 'done',
@@ -210,8 +241,13 @@ export class TripService implements OnModuleInit {
     return (
       candidates.find((job) => {
         const forms = this.keywordForms(job.keyword);
+        const keywordMatches =
+          forms.stripped === target.stripped ||
+          forms.sorted === target.sorted;
+        if (!keywordMatches) return false;
         return (
-          forms.stripped === target.stripped || forms.sorted === target.sorted
+          preferencesCacheKey(normalizePreferences(job.preferences)) ===
+          targetPrefs
         );
       }) ?? null
     );
@@ -314,13 +350,17 @@ export class TripService implements OnModuleInit {
     });
   }
 
-  private async run(jobId: string, keyword: string) {
+  private async run(
+    jobId: string,
+    keyword: string,
+    preferences: TripPreferences = EMPTY_PREFERENCES,
+  ) {
     try {
       const cfg = await this.resolveRuntimeConfig();
-      const plan = await this.runPlanning(jobId, keyword);
+      const plan = await this.runPlanning(jobId, keyword, preferences);
       const urls = await this.runSearch(jobId, plan, cfg);
       const fetched = await this.runCrawl(jobId, urls, cfg);
-      await this.runCompose(jobId, keyword, plan, fetched);
+      await this.runCompose(jobId, keyword, plan, fetched, preferences);
     } catch (error) {
       const message = (error as Error).message;
       this.logger.error(`Trip job ${jobId} failed: ${message}`);
@@ -338,10 +378,14 @@ export class TripService implements OnModuleInit {
     }
   }
 
-  private async runPlanning(jobId: string, keyword: string) {
+  private async runPlanning(
+    jobId: string,
+    keyword: string,
+    preferences: TripPreferences,
+  ) {
     await this.publish(jobId, 'planning', 5, '正在分解關鍵字…');
 
-    const plan = await this.planner.plan(keyword);
+    const plan = await this.planner.plan(keyword, preferences);
     await this.prisma.tripQuery.createMany({
       data: plan.queries.map((query) => ({
         jobId,
@@ -571,6 +615,7 @@ export class TripService implements OnModuleInit {
       title: string | null;
       content: string | null;
     }>,
+    preferences: TripPreferences,
   ) {
     await this.publish(
       jobId,
@@ -582,7 +627,12 @@ export class TripService implements OnModuleInit {
     // Resolved before composing: settings can change mid-compose, and the
     // record should name the model that actually produced the itinerary.
     const { model } = await this.llm.target();
-    const itinerary = await this.composer.compose(keyword, plan, documents);
+    const itinerary = await this.composer.compose(
+      keyword,
+      plan,
+      documents,
+      preferences,
+    );
 
     await this.prisma.tripItinerary.create({
       data: {

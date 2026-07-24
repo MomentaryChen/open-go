@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { TripQueueService } from '../trip/trip-queue.service';
 import { TripService } from '../trip/trip.service';
+import { normalizePreferences } from '../trip/trip-preferences';
 
 /** Statuses a job can sit in while still working; anything else is terminal. */
 const ACTIVE_STATUSES = [
@@ -120,7 +121,11 @@ export class AdminJobsService {
     const job = await this.prisma.tripJob.findUnique({ where: { id: jobId } });
     if (!job) throw new NotFoundException(`Trip job ${jobId} not found`);
 
-    const { job: created } = await this.trips.createJob(job.keyword, true);
+    const { job: created } = await this.trips.createJob(
+      job.keyword,
+      normalizePreferences(job.preferences),
+      true,
+    );
     this.logger.log(`Retried job ${jobId} as ${created.id} ("${job.keyword}")`);
     return { jobId: created.id, keyword: created.keyword, status: created.status };
   }

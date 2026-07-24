@@ -10,8 +10,13 @@ import {
 import { Observable, map } from 'rxjs';
 import { TripEventsService } from './trip-events.service';
 import { TripService } from './trip.service';
+import { normalizePreferences } from './trip-preferences';
 
-type CreateTripDto = { keyword?: string; forceRefresh?: boolean };
+type CreateTripDto = {
+  keyword?: string;
+  forceRefresh?: boolean;
+  preferences?: unknown;
+};
 
 @Controller('trips')
 export class TripController {
@@ -30,8 +35,10 @@ export class TripController {
       throw new BadRequestException('keyword must be 200 characters or fewer');
     }
 
+    const preferences = normalizePreferences(body?.preferences);
     const { job, cached } = await this.tripService.createJob(
       keyword,
+      preferences,
       body?.forceRefresh === true,
     );
     return { jobId: job.id, status: job.status, cached };

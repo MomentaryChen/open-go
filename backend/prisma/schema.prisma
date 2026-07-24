@@ -80,6 +80,9 @@ model SearchKeywordLog {
 model TripJob {
   id        String   @id @default(cuid())
   keyword   String
+  /// Structured traveller preferences (TripPreferences JSON); null for
+  /// keyword-only jobs and legacy rows.
+  preferences Json?
   status    String   @default("pending")
   progress  Int      @default(0)
   message   String?

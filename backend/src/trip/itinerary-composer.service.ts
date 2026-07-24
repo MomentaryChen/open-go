@@ -5,6 +5,11 @@ import { DEFAULT_COMPOSER_PROMPT } from './prompts';
 import { STRUCTURED_LLM } from './llm/llm.types';
 import type { StructuredLlm } from './llm/llm.types';
 import { TripPlan } from './keyword-planner.service';
+import {
+  EMPTY_PREFERENCES,
+  describePreferences,
+  type TripPreferences,
+} from './trip-preferences';
 import { tripConfig } from './trip.config';
 
 const ItinerarySchema = z.object({
@@ -99,6 +104,24 @@ function languageRule(outputLanguage: string) {
   return `\n- Write all user-facing text in ${outputLanguage}, even when the source documents are in another language.`;
 }
 
+/**
+ * Appended to the composer prompt whenever the traveller set explicit
+ * preferences, so they are honoured even when an admin has edited the base
+ * prompt (same guarantee pattern as languageRule). The concrete values arrive
+ * in the user message; this states how to apply them.
+ */
+function preferencesRule() {
+  return (
+    "\n- Honour the traveller's explicit preferences listed after the documents: " +
+    'match the requested number of days exactly; respect the stated pace when ' +
+    'deciding how many stops to place per day (relaxed = fewer, packed = more); ' +
+    'keep dining, lodging areas and activities within the stated budget band; ' +
+    'include every must-visit place the documents support (and if a requested ' +
+    'place has no supporting document, say so plainly in the tips rather than ' +
+    'inventing details); and never schedule anything the traveller asked to avoid.'
+  );
+}
+
 @Injectable()
 export class ItineraryComposerService {
   private readonly logger = new Logger(ItineraryComposerService.name);
@@ -112,6 +135,7 @@ export class ItineraryComposerService {
     keyword: string,
     plan: TripPlan,
     documents: ComposerDocument[],
+    preferences: TripPreferences = EMPTY_PREFERENCES,
   ): Promise<Itinerary> {
     const corpus = this.buildCorpus(documents);
     if (!corpus.text) {
@@ -124,10 +148,15 @@ export class ItineraryComposerService {
       'trip.composerSystemPrompt',
       DEFAULT_COMPOSER_PROMPT,
     );
+    const constraints = describePreferences(preferences);
     const itinerary = await this.llm.generate({
-      // The language rule is always appended so an admin-edited prompt cannot
-      // accidentally drop input-language matching.
-      system: basePrompt + languageRule(plan.outputLanguage || 'zh-TW'),
+      // The language rule — and the preference rule when any preference is set —
+      // are always appended so an admin-edited prompt cannot accidentally drop
+      // input-language matching or the traveller's explicit constraints.
+      system:
+        basePrompt +
+        languageRule(plan.outputLanguage || 'zh-TW') +
+        (constraints ? preferencesRule() : ''),
       parts: [
         { text: `<documents>\n${corpus.text}\n</documents>`, cacheable: true },
         {
@@ -136,6 +165,13 @@ export class ItineraryComposerService {
             `Destination: ${plan.destination}`,
             `Planned length: ${plan.durationDays} days`,
             `Traveller style: ${plan.travelStyle}`,
+            ...(constraints
+              ? [
+                  '',
+                  "Traveller's explicit preferences (these override any default assumptions):",
+                  constraints,
+                ]
+              : []),
             '',
             `Build a ${plan.durationDays}-day itinerary from the ${corpus.used} documents above.`,
           ].join('\n'),

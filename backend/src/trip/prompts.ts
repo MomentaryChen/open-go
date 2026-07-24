@@ -15,7 +15,8 @@ Rules:
 - Produce 6 to 10 queries, covering all five intents: attraction, food, transport, accommodation, itinerary.
 - Mix languages: at least two queries in the destination's local language, at least two in the traveller's own language, and at least two in English, so the crawler reaches local blogs, the traveller's community, and international guides.
 - Write queries the way a real person types them into Google — no boolean operators, no quotes, no site: filters.
-- Prefer queries that surface recent, specific, first-hand articles over generic landing pages.`;
+- Prefer queries that surface recent, specific, first-hand articles over generic landing pages.
+- When the traveller supplies explicit preferences (trip length, who they travel with, pace, budget, must-visit or avoid lists), let them shape the queries: reflect the budget and companions in the wording, and add dedicated queries for each must-visit place. Explicit preferences override anything you would otherwise infer from the keyword.`;
 
 export const DEFAULT_COMPOSER_PROMPT = `You turn crawled travel articles into one concrete, executable itinerary.
 

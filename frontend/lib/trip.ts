@@ -110,3 +110,85 @@ export const TRIP_STAGES: Array<{ status: TripStatus; label: string }> = [
 export function apiBaseUrl() {
   return process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:33000'
 }
+
+// --- Structured traveller preferences -------------------------------------
+// Optional overrides sent alongside the keyword so the pipeline stops guessing
+// trip length / companions / pace / budget / must-see & avoid from the keyword
+// alone. Values mirror the backend TripPreferences enums exactly.
+
+export type TripPace = 'relaxed' | 'balanced' | 'packed'
+export type TripBudget = 'budget' | 'moderate' | 'comfort' | 'luxury'
+export type TripCompanions =
+  | 'solo'
+  | 'couple'
+  | 'family'
+  | 'friends'
+  | 'parents'
+  | 'group'
+
+export type TripPreferences = {
+  durationDays: number | null
+  companions: TripCompanions | null
+  pace: TripPace | null
+  budget: TripBudget | null
+  mustVisit: string[]
+  avoid: string[]
+}
+
+export const EMPTY_TRIP_PREFERENCES: TripPreferences = {
+  durationDays: null,
+  companions: null,
+  pace: null,
+  budget: null,
+  mustVisit: [],
+  avoid: [],
+}
+
+export const COMPANION_OPTIONS: { value: TripCompanions; label: string }[] = [
+  { value: 'solo', label: '一個人' },
+  { value: 'couple', label: '情侶' },
+  { value: 'family', label: '親子' },
+  { value: 'friends', label: '朋友' },
+  { value: 'parents', label: '長輩同行' },
+  { value: 'group', label: '團體' },
+]
+
+export const PACE_OPTIONS: { value: TripPace; label: string }[] = [
+  { value: 'relaxed', label: '悠閒' },
+  { value: 'balanced', label: '適中' },
+  { value: 'packed', label: '緊湊' },
+]
+
+export const BUDGET_OPTIONS: { value: TripBudget; label: string }[] = [
+  { value: 'budget', label: '經濟' },
+  { value: 'moderate', label: '中等' },
+  { value: 'comfort', label: '舒適' },
+  { value: 'luxury', label: '奢華' },
+]
+
+/** Quick-pick day counts; any other value is still allowed via the number field. */
+export const DURATION_OPTIONS = [2, 3, 4, 5, 7]
+
+/** Whether any field is set — controls whether preferences are sent at all. */
+export function hasTripPreferences(p: TripPreferences): boolean {
+  return (
+    p.durationDays != null ||
+    p.companions != null ||
+    p.pace != null ||
+    p.budget != null ||
+    p.mustVisit.length > 0 ||
+    p.avoid.length > 0
+  )
+}
+
+/** Count of set fields, for the collapsed panel's badge. */
+export function countTripPreferences(p: TripPreferences): number {
+  return (
+    (p.durationDays != null ? 1 : 0) +
+    (p.companions != null ? 1 : 0) +
+    (p.pace != null ? 1 : 0) +
+    (p.budget != null ? 1 : 0) +
+    (p.mustVisit.length > 0 ? 1 : 0) +
+    (p.avoid.length > 0 ? 1 : 0)
+  )
+}

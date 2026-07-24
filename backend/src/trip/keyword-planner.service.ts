@@ -4,6 +4,11 @@ import { SettingsService } from '../settings/settings.service';
 import { DEFAULT_PLANNER_PROMPT } from './prompts';
 import { STRUCTURED_LLM } from './llm/llm.types';
 import type { StructuredLlm } from './llm/llm.types';
+import {
+  EMPTY_PREFERENCES,
+  describePreferences,
+  type TripPreferences,
+} from './trip-preferences';
 
 const PlanSchema = z.object({
   destination: z
@@ -56,20 +61,46 @@ export class KeywordPlannerService {
     private readonly settings: SettingsService,
   ) {}
 
-  async plan(keyword: string): Promise<TripPlan> {
+  async plan(
+    keyword: string,
+    preferences: TripPreferences = EMPTY_PREFERENCES,
+  ): Promise<TripPlan> {
     const system = await this.settings.getString(
       'trip.plannerSystemPrompt',
       DEFAULT_PLANNER_PROMPT,
     );
+
+    const parts: Array<{ text: string }> = [
+      { text: `Traveller keyword: ${keyword}` },
+    ];
+    const constraints = describePreferences(preferences);
+    if (constraints) {
+      parts.push({
+        text:
+          "Traveller's explicit preferences (honour these over anything inferred " +
+          `from the keyword; craft queries that reflect them):\n${constraints}`,
+      });
+    }
+
     const plan = await this.llm.generate({
       system,
-      parts: [{ text: `Traveller keyword: ${keyword}` }],
+      parts,
       schema: PlanSchema,
       maxOutputTokens: 4000,
       effort: 'medium',
     });
 
-    this.logger.log(`Planned ${plan.queries.length} queries for "${keyword}"`);
-    return plan;
+    // Explicit constraints win over the model's inference: an emptied field
+    // keeps the planner's guess, a set one replaces it.
+    const resolved: TripPlan = {
+      ...plan,
+      durationDays: preferences.durationDays ?? plan.durationDays,
+    };
+
+    this.logger.log(
+      `Planned ${resolved.queries.length} queries for "${keyword}"` +
+        (constraints ? ' with explicit preferences' : ''),
+    );
+    return resolved;
   }
 }
