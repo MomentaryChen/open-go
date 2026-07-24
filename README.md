@@ -95,7 +95,9 @@ pnpm dev:frontend
 1. **planning** — the LLM splits the keyword into 6–10 search queries across attraction /
    food / transport / accommodation / itinerary intents, in mixed languages.
 2. **searching** — each query is run against a web search engine; results are de-duplicated
-   and capped per host until the target document count (default 30) is collected.
+   and capped per host until the target document count (default 30) is collected. Hosts on
+   the static social blocklist, auto-unreliable hosts (3+ failures / 0 successes in 30 days),
+   and `trip.hostDenylist` are skipped; `trip.hostAllowlist` overrides those skips.
 3. **crawling** — the pages are fetched concurrently, boilerplate is stripped, and body
    text is stored in `TripDocument`.
 4. **composing** — the LLM reads the crawled corpus and returns a structured day-by-day
@@ -149,6 +151,8 @@ Seeded settings:
 | `trip.cacheTtlDays` | `7` | Days a finished job satisfies the same keyword again (`0` disables). |
 | `trip.resultsPerQuery` | `12` | Max results taken from a single search query. |
 | `trip.maxDocumentsPerHost` | `3` | Max documents from one host, to keep sources diverse. |
+| `trip.hostAllowlist` | `[]` | JSON array of hosts the crawler must never skip (overrides auto-block and the static social blocklist). Edit from `/admin/keywords` → Source hosts. |
+| `trip.hostDenylist` | `[]` | JSON array of hosts the crawler must always skip (force-block junk sources). Edit from `/admin/keywords` → Source hosts. |
 | `trip.llmProvider` | `gemini` | `gemini` or `anthropic`; the router falls back to env on bad values. |
 | `trip.llmModel` | `auto` | `auto` = the provider's default model; or any explicit model name. |
 | `trip.plannerSystemPrompt` | built-in | System prompt for the keyword planner (blank = code default). |

@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- Added manual source-host allow/deny lists on `/admin/keywords` (Source hosts tab): operators can temporarily unblock an auto-blocked site or force-skip a junk domain. Lists persist as `trip.hostAllowlist` / `trip.hostDenylist` settings and are applied at crawl URL selection (allow overrides static + auto blocks; deny always skips). APIs: `GET/PUT /ops/hosts/policy`, `PUT /ops/hosts/override`.
+
 ### Fixed
 - Fixed admin keyword analytics (`/admin/keywords`) failing to load: the host stats query joined `TripDocument` and `TripJob` without qualifying `status` / `url`, so PostgreSQL rejected the ambiguous column reference and the page's parallel fetch aborted.
 

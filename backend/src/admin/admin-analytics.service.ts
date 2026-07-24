@@ -1,5 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  hostOverride,
+  isHostBlocked,
+  listCoversHost,
+  STATIC_BLOCKED_HOSTS,
+} from '../trip/host-policy';
+import { HostPolicyService } from '../trip/host-policy.service';
 
 type KeywordRow = {
   keyword: string;
@@ -19,7 +26,10 @@ type TrendRow = {
 
 @Injectable()
 export class AdminAnalyticsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly hostPolicy: HostPolicyService,
+  ) {}
 
   /**
    * Keyword demand and reliability, derived from TripJob rather than
@@ -127,9 +137,15 @@ export class AdminAnalyticsService {
     }));
   }
 
-  /** Hosts the crawler keeps hitting, with their success rate. */
+  /** Hosts the crawler keeps hitting, with their success rate and policy. */
   async hosts(days: number, limit: number) {
     const since = this.daysAgo(days);
+    const [policy, unreliableHosts] = await Promise.all([
+      this.hostPolicy.getLists(),
+      this.loadUnreliableHosts(),
+    ]);
+    const allowlist = new Set(policy.allowlist);
+    const denylist = new Set(policy.denylist);
 
     const rows = await this.prisma.$queryRaw<
       Array<{ host: string; attempts: bigint; fetched: bigint }>
@@ -147,18 +163,96 @@ export class AdminAnalyticsService {
       LIMIT ${limit}
     `;
 
-    return rows.map((row) => {
+    const seen = new Set<string>();
+    const mapped = rows.map((row) => {
       const attempts = Number(row.attempts);
       const fetched = Number(row.fetched);
-      return {
-        host: row.host,
+      // UI badge for this analytics window; crawl still uses loadUnreliableHosts.
+      const autoBlocked = attempts >= 3 && fetched === 0;
+      seen.add(row.host);
+      return this.hostRow(row.host, {
         attempts,
         fetched,
-        successRate: attempts ? fetched / attempts : 0,
-        // Mirrors TripService.loadUnreliableHosts: 3+ tries, zero successes.
-        autoBlocked: attempts >= 3 && fetched === 0,
-      };
+        autoBlocked,
+        policy,
+        allowlist,
+        denylist,
+        unreliableHosts,
+      });
     });
+
+    // Surface manually listed hosts even when they have no recent crawl stats.
+    for (const host of [...policy.allowlist, ...policy.denylist]) {
+      if (seen.has(host)) continue;
+      mapped.push(
+        this.hostRow(host, {
+          attempts: 0,
+          fetched: 0,
+          autoBlocked: false,
+          policy,
+          allowlist,
+          denylist,
+          unreliableHosts,
+        }),
+      );
+      seen.add(host);
+    }
+
+    return mapped;
+  }
+
+  private hostRow(
+    host: string,
+    opts: {
+      attempts: number;
+      fetched: number;
+      autoBlocked: boolean;
+      policy: { allowlist: string[]; denylist: string[] };
+      allowlist: Set<string>;
+      denylist: Set<string>;
+      unreliableHosts: Set<string>;
+    },
+  ) {
+    const allowMatch = listCoversHost(host, opts.policy.allowlist);
+    const denyMatch = listCoversHost(host, opts.policy.denylist);
+    const staticBlocked = listCoversHost(host, STATIC_BLOCKED_HOSTS);
+    return {
+      host,
+      attempts: opts.attempts,
+      fetched: opts.fetched,
+      successRate: opts.attempts ? opts.fetched / opts.attempts : 0,
+      autoBlocked: opts.autoBlocked,
+      override: hostOverride(host, opts.policy),
+      allowMatch,
+      denyMatch,
+      staticBlocked,
+      effectivelyBlocked: isHostBlocked(host, {
+        allowlist: opts.allowlist,
+        denylist: opts.denylist,
+        unreliable: opts.unreliableHosts,
+        staticBlocked: STATIC_BLOCKED_HOSTS,
+      }),
+    };
+  }
+
+  /**
+   * Same window and rules as TripService.loadUnreliableHosts so the admin
+   * “effectively blocked” flag matches crawl URL selection.
+   */
+  private async loadUnreliableHosts(): Promise<Set<string>> {
+    try {
+      const rows = await this.prisma.$queryRaw<Array<{ host: string }>>`
+        SELECT regexp_replace(split_part(split_part(url, '//', 2), '/', 1), '^www\.', '') AS host
+        FROM "TripDocument"
+        WHERE "fetchedAt" >= NOW() - INTERVAL '30 days'
+        GROUP BY 1
+        HAVING COUNT(*) >= 3
+           AND COUNT(*) FILTER (WHERE status = 'fetched') = 0
+      `;
+      return new Set(rows.map((row) => row.host));
+    } catch {
+      return new Set();
+    }
   }
 
   /**

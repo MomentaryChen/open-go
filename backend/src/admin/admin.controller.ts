@@ -14,6 +14,10 @@ import { AffiliateConfigService } from '../affiliate/affiliate-config.service';
 import type { AffiliateConfigInput } from '../affiliate/affiliate-config.service';
 import { RetentionService } from '../retention/retention.service';
 import { AdminGuard } from '../settings/admin.guard';
+import {
+  HostPolicyService,
+  type HostOverrideAction,
+} from '../trip/host-policy.service';
 import { AdminAnalyticsService } from './admin-analytics.service';
 import { AdminJobsService } from './admin-jobs.service';
 
@@ -30,6 +34,7 @@ export class AdminController {
     private readonly analytics: AdminAnalyticsService,
     private readonly retention: RetentionService,
     private readonly affiliateConfig: AffiliateConfigService,
+    private readonly hostPolicy: HostPolicyService,
   ) {}
 
   @Get('jobs')
@@ -111,6 +116,37 @@ export class AdminController {
       this.parseInt(days, 30, 1, 365),
       this.parseInt(limit, 30, 1, 200),
     );
+  }
+
+  /** Manual allow / deny lists used by crawl URL selection. */
+  @Get('hosts/policy')
+  getHostPolicy() {
+    return this.hostPolicy.getLists();
+  }
+
+  /** Replace one or both host lists. Omitted fields are left unchanged. */
+  @Put('hosts/policy')
+  saveHostPolicy(
+    @Body() body?: { allowlist?: string[]; denylist?: string[] },
+  ) {
+    return this.hostPolicy.saveLists(body ?? {});
+  }
+
+  /**
+   * Set a single-host override: allow (whitelist), deny (blacklist), or clear.
+   * Used by the keywords → source hosts table actions.
+   */
+  @Put('hosts/override')
+  setHostOverride(@Body() body?: { host?: string; action?: string }) {
+    const host = body?.host;
+    const action = body?.action as HostOverrideAction | undefined;
+    if (!host || typeof host !== 'string') {
+      throw new BadRequestException('host is required');
+    }
+    if (action !== 'allow' && action !== 'deny' && action !== 'clear') {
+      throw new BadRequestException('action must be allow, deny, or clear');
+    }
+    return this.hostPolicy.setOverride(host, action);
   }
 
   @Get('analytics/affiliate')
