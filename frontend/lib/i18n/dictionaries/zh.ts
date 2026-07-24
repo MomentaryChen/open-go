@@ -356,6 +356,18 @@ export const zh = {
       last24hHint: '完成 {done} · 失敗 {failed}',
       p95Hint: 'P95 {value}',
       stuckBanner: '有 {count} 個任務超過 {minutes} 分鐘沒有進度，可能是後端重啟造成的殘留',
+      batchRetry: '重新執行符合條件 ({n})',
+      batchDelete: '刪除符合條件 ({n})',
+      batchRetryTitle: '重新執行 {n} 個符合條件的任務？',
+      batchRetryDescription:
+        '會為每個符合條件的任務建立新執行（最多 100 個），並略過快取。原任務會保留作為紀錄。',
+      batchDeleteTitle: '刪除 {n} 個符合條件的任務？',
+      batchDeleteDescription:
+        '會永久刪除符合條件的任務及其查詢、文件與行程（最多 100 個），此操作無法復原。',
+      batchRetried: '已重新執行 {n} 個任務',
+      batchRetriedTruncated: '已重新執行 {n} / {matched} 個符合條件的任務（上限 {limit}）',
+      batchDeleted: '已刪除 {n} 個任務',
+      batchDeletedTruncated: '已刪除 {n} / {matched} 個符合條件的任務（上限 {limit}）',
       col: {
         keyword: '關鍵字',
         status: '狀態',

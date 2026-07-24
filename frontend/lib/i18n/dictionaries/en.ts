@@ -373,6 +373,18 @@ export const en: Dictionary = {
       p95Hint: 'P95 {value}',
       stuckBanner:
         '{count} jobs have made no progress for over {minutes} minutes — likely leftovers from a backend restart',
+      batchRetry: 'Retry matching ({n})',
+      batchDelete: 'Delete matching ({n})',
+      batchRetryTitle: 'Retry {n} matching jobs?',
+      batchRetryDescription:
+        'Creates a new run for each matching job (up to 100), bypassing the cache. Original jobs are kept as history.',
+      batchDeleteTitle: 'Delete {n} matching jobs?',
+      batchDeleteDescription:
+        'Permanently deletes matching jobs and their queries, documents, and itineraries (up to 100). This cannot be undone.',
+      batchRetried: 'Retried {n} jobs',
+      batchRetriedTruncated: 'Retried {n} of {matched} matching jobs (cap {limit})',
+      batchDeleted: 'Deleted {n} jobs',
+      batchDeletedTruncated: 'Deleted {n} of {matched} matching jobs (cap {limit})',
       col: {
         keyword: 'Keyword',
         status: 'Status',
