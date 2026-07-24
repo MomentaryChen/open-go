@@ -39,12 +39,12 @@ export function AdminNav() {
   }
 
   return (
-    <aside className="flex w-56 shrink-0 flex-col border-r bg-background">
+    <aside className="sticky top-0 flex h-screen w-56 shrink-0 flex-col border-r bg-background">
       <div className="border-b p-4">
         <p className="text-lg font-semibold">{t.admin.sidebarTitle}</p>
         <p className="text-xs text-muted-foreground">{t.admin.brand}</p>
       </div>
-      <nav className="flex-1 space-y-1 p-2">
+      <nav className="flex-1 space-y-1 overflow-y-auto p-2">
         {NAV_ITEMS.map((item) => (
           <Link
             key={item.href}
