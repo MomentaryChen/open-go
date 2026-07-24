@@ -99,7 +99,7 @@ export class RetentionService {
     const where = {
       content: { not: null },
       job: {
-        status: { in: ['done', 'failed'] },
+        status: { in: ['done', 'failed', 'cancelled'] },
         createdAt: excludeOlderThanDays
           ? { lt: cutoff, gte: this.daysAgo(excludeOlderThanDays) }
           : { lt: cutoff },
@@ -121,7 +121,7 @@ export class RetentionService {
     const cutoff = this.daysAgo(days);
 
     const where = {
-      status: { in: ['done', 'failed'] },
+      status: { in: ['done', 'failed', 'cancelled'] },
       createdAt: { lt: cutoff },
     };
 

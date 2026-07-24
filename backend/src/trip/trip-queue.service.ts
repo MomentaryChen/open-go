@@ -6,11 +6,13 @@ import { tripConfig } from './trip.config';
 
 type QueueItem = {
   jobId: string;
-  run: () => Promise<void>;
+  run: (signal: AbortSignal) => Promise<void>;
 };
 
 /** How many waiting jobs get a "you are Nth in line" message. */
 const MAX_ANNOUNCED_POSITIONS = 25;
+
+export type CancelQueueResult = 'queued' | 'running' | 'not_found';
 
 /**
  * Admission control for trip jobs.
@@ -30,6 +32,8 @@ export class TripQueueService {
 
   private readonly backlog: QueueItem[] = [];
   private readonly running = new Set<string>();
+  /** AbortControllers for jobs currently executing (not merely queued). */
+  private readonly controllers = new Map<string, AbortController>();
 
   /** Guards against two concurrent pumps both admitting into the same slot. */
   private pumping = false;
@@ -42,9 +46,32 @@ export class TripQueueService {
   ) {}
 
   /** Queues a job; it starts as soon as a slot is free. */
-  enqueue(jobId: string, run: () => Promise<void>) {
+  enqueue(jobId: string, run: (signal: AbortSignal) => Promise<void>) {
     this.backlog.push({ jobId, run });
     void this.pump();
+  }
+
+  /**
+   * Stops a queued or running job at the queue layer.
+   * - queued: dropped from the backlog so it never starts
+   * - running: AbortSignal fires; the pipeline exits at the next check
+   * - not_found: not in this process (already finished, or stranded after restart)
+   */
+  cancel(jobId: string): CancelQueueResult {
+    const index = this.backlog.findIndex((item) => item.jobId === jobId);
+    if (index >= 0) {
+      this.backlog.splice(index, 1);
+      void this.publishQueuePositions();
+      return 'queued';
+    }
+
+    const controller = this.controllers.get(jobId);
+    if (controller) {
+      controller.abort();
+      return 'running';
+    }
+
+    return 'not_found';
   }
 
   stats() {
@@ -83,15 +110,18 @@ export class TripQueueService {
   }
 
   private start(item: QueueItem) {
+    const controller = new AbortController();
+    this.controllers.set(item.jobId, controller);
     this.running.add(item.jobId);
     void item
-      .run()
+      .run(controller.signal)
       .catch((error) => {
         // TripService marks its own failures; this only catches a crash in
         // that handling, which must still free the slot.
         this.logger.error(`Trip job ${item.jobId} crashed`, error as Error);
       })
       .finally(() => {
+        this.controllers.delete(item.jobId);
         this.running.delete(item.jobId);
         void this.pump();
       });

@@ -5,7 +5,8 @@ export type TripStatus =
   | 'crawling'
   | 'composing'
   | 'done'
-  | 'failed';
+  | 'failed'
+  | 'cancelled';
 
 export type TripProgressEvent = {
   jobId: string;

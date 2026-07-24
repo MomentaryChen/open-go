@@ -33,6 +33,7 @@ import { TripService } from './trip.service';
   exports: [
     TripService,
     TripQueueService,
+    TripEventsService,
     GoogleSearchProvider,
     BrowserFetcherService,
   ],
