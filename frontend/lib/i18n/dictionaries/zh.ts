@@ -281,6 +281,7 @@ export const zh = {
     brand: 'Travel Discovery',
     sidebarTitle: '管理後台',
     nav: {
+      dashboard: '總覽',
       health: '系統健康',
       jobs: '任務監控',
       keywords: '關鍵字分析',
@@ -312,6 +313,34 @@ export const zh = {
       password: '密碼',
       submitting: '登入中…',
       submit: '登入',
+    },
+
+    dashboard: {
+      title: '總覽',
+      subtitle: '卡住任務、高失敗關鍵字、Affiliate CTR 與儲存用量一頁掌握',
+      viewAll: '查看全部',
+      openJobs: '前往任務',
+      openSettings: '前往設定',
+      emptyKeywords: '近 30 天沒有高失敗關鍵字',
+      emptyAffiliate: '近 30 天尚無 CTA 事件',
+      emptyStorage: '無法取得儲存用量',
+      stat: {
+        stuck: '卡住任務',
+        stuckHint: '超過 {minutes} 分鐘無進度',
+        highFailure: '高失敗關鍵字',
+        ctr: 'Affiliate CTR',
+        ctrHint: '{clicks} 次點擊 / {impressions} 次曝光',
+        storage: '內文佔用',
+        storageHint: '{jobs} 個任務 · {documents} 筆仍有內文',
+      },
+      sections: {
+        keywords: '高失敗關鍵字',
+        keywordsHint: '近 {days} 天、失敗率 > 30% 且至少跑過 2 次',
+        affiliate: 'Affiliate 漏斗',
+        affiliateHint: '近 {days} 天 CTA 曝光與點擊',
+        storage: '儲存用量',
+        storageHint: '文件內文與擷取快取佔用（詳細清理在設定頁）',
+      },
     },
 
     status: {
