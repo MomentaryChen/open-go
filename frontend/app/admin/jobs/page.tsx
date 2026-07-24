@@ -7,12 +7,17 @@ import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
+  EyeOff,
+  Pin,
   RefreshCw,
   RotateCw,
   Search,
+  Square,
+  Star,
   Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { Badge } from '@/components/ui/badge'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,6 +47,9 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import {
+  batchDeleteJobs,
+  batchRetryJobs,
+  cancelJob,
   deleteJob,
   failStuckJobs,
   getJobStats,
@@ -60,7 +68,16 @@ import { fmt } from '@/lib/i18n'
 import { useLanguage } from '@/lib/i18n/context'
 
 const PAGE_SIZE = 20
-const STATUS_OPTIONS = ['all', 'active', 'done', 'failed', 'pending'] as const
+const STATUS_OPTIONS = ['all', 'active', 'done', 'failed', 'cancelled', 'pending'] as const
+
+/** Statuses that can still be cancelled (queued or in-flight). */
+const ACTIVE_JOB_STATUSES = new Set([
+  'pending',
+  'planning',
+  'searching',
+  'crawling',
+  'composing',
+])
 
 /** Auto-refresh cadence while any job is still running. */
 const LIVE_REFRESH_MS = 5000
@@ -78,20 +95,31 @@ export default function AdminJobsPage() {
 function JobsPageContent() {
   const { t } = useLanguage()
   // Deep links from the keyword analytics page pre-fill the filter.
-  const initialKeyword = useSearchParams().get('keyword') ?? ''
+  const searchParams = useSearchParams()
+  const initialKeyword = searchParams.get('keyword') ?? ''
+  const statusParam = searchParams.get('status') ?? 'all'
+  const initialStatus = (STATUS_OPTIONS as readonly string[]).includes(statusParam)
+    ? statusParam
+    : 'all'
 
   const [items, setItems] = useState<JobSummary[]>([])
   const [total, setTotal] = useState(0)
   const [stats, setStats] = useState<JobStats | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const [status, setStatus] = useState('all')
+  const [status, setStatus] = useState(initialStatus)
   const [keywordInput, setKeywordInput] = useState(initialKeyword)
   const [keyword, setKeyword] = useState(initialKeyword)
   const [page, setPage] = useState(1)
 
   const [deleteTarget, setDeleteTarget] = useState<JobSummary | null>(null)
+  const [cancelTarget, setCancelTarget] = useState<JobSummary | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [batchAction, setBatchAction] = useState<'retry' | 'delete' | null>(null)
+  const [batchBusy, setBatchBusy] = useState(false)
+
+  const hasFilter = status !== 'all' || Boolean(keyword)
+  const batchCount = Math.min(total, 100)
 
   const refresh = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -150,6 +178,21 @@ function JobsPageContent() {
     }
   }
 
+  const handleCancel = async () => {
+    if (!cancelTarget) return
+    setBusyId(cancelTarget.id)
+    try {
+      await cancelJob(cancelTarget.id)
+      toast.success(fmt(t.admin.jobs.cancelled, { keyword: cancelTarget.keyword }))
+      setCancelTarget(null)
+      await refresh({ silent: true })
+    } catch (error) {
+      toast.error((error as Error).message)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   const handleDelete = async () => {
     if (!deleteTarget) return
     try {
@@ -170,6 +213,47 @@ function JobsPageContent() {
       await refresh({ silent: true })
     } catch (error) {
       toast.error((error as Error).message)
+    }
+  }
+
+  const currentFilter = () => ({
+    status: status === 'all' ? undefined : status,
+    keyword: keyword || undefined,
+  })
+
+  const handleBatchConfirm = async () => {
+    if (!batchAction || !hasFilter) return
+    setBatchBusy(true)
+    try {
+      if (batchAction === 'retry') {
+        const result = await batchRetryJobs(currentFilter())
+        toast.success(
+          result.truncated
+            ? fmt(t.admin.jobs.batchRetriedTruncated, {
+                n: result.retried,
+                matched: result.matched,
+                limit: result.limit,
+              })
+            : fmt(t.admin.jobs.batchRetried, { n: result.retried }),
+        )
+      } else {
+        const result = await batchDeleteJobs(currentFilter())
+        toast.success(
+          result.truncated
+            ? fmt(t.admin.jobs.batchDeletedTruncated, {
+                n: result.deleted,
+                matched: result.matched,
+                limit: result.limit,
+              })
+            : fmt(t.admin.jobs.batchDeleted, { n: result.deleted }),
+        )
+      }
+      setBatchAction(null)
+      await refresh({ silent: true })
+    } catch (error) {
+      toast.error((error as Error).message)
+    } finally {
+      setBatchBusy(false)
     }
   }
 
@@ -272,6 +356,28 @@ function JobsPageContent() {
             <Search className="h-4 w-4" />
           </Button>
         </div>
+        {hasFilter && total > 0 && (
+          <div className="ml-auto flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={batchBusy}
+              onClick={() => setBatchAction('retry')}
+            >
+              <RotateCw className="h-4 w-4" />
+              {fmt(t.admin.jobs.batchRetry, { n: batchCount })}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={batchBusy}
+              onClick={() => setBatchAction('delete')}
+            >
+              <Trash2 className="h-4 w-4 text-destructive" />
+              {fmt(t.admin.jobs.batchDelete, { n: batchCount })}
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="rounded-lg border bg-background">
@@ -284,7 +390,7 @@ function JobsPageContent() {
               <TableHead className="hidden w-24 text-right md:table-cell">{t.admin.jobs.col.documents}</TableHead>
               <TableHead className="hidden w-28 text-right lg:table-cell">{t.admin.jobs.col.duration}</TableHead>
               <TableHead className="hidden w-40 lg:table-cell">{t.admin.jobs.col.createdAt}</TableHead>
-              <TableHead className="w-24 text-right">{t.admin.jobs.col.actions}</TableHead>
+              <TableHead className="w-32 text-right">{t.admin.jobs.col.actions}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -315,6 +421,34 @@ function JobsPageContent() {
                         {job.error}
                       </p>
                     )}
+                    {job.curation &&
+                      (job.curation.pinned ||
+                        job.curation.featured ||
+                        job.curation.hidden) && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {job.curation.pinned && (
+                            <Badge variant="secondary" className="gap-1">
+                              <Pin className="h-3 w-3" />
+                              {t.admin.curation.pinned}
+                            </Badge>
+                          )}
+                          {job.curation.featured && (
+                            <Badge variant="secondary" className="gap-1">
+                              <Star className="h-3 w-3" />
+                              {t.admin.curation.featured}
+                            </Badge>
+                          )}
+                          {job.curation.hidden && (
+                            <Badge
+                              variant="outline"
+                              className="gap-1 text-muted-foreground"
+                            >
+                              <EyeOff className="h-3 w-3" />
+                              {t.admin.curation.hidden}
+                            </Badge>
+                          )}
+                        </div>
+                      )}
                   </TableCell>
                   <TableCell>
                     <JobStatusBadge status={job.status} />
@@ -332,6 +466,18 @@ function JobsPageContent() {
                     {formatDateTime(job.createdAt)}
                   </TableCell>
                   <TableCell className="text-right">
+                    {ACTIVE_JOB_STATUSES.has(job.status) && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        disabled={busyId === job.id}
+                        onClick={() => setCancelTarget(job)}
+                        aria-label={fmt(t.admin.jobs.cancelAria, { keyword: job.keyword })}
+                        title={t.admin.jobs.cancel}
+                      >
+                        <Square className="h-4 w-4" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"
@@ -386,6 +532,28 @@ function JobsPageContent() {
       </div>
 
       <AlertDialog
+        open={!!cancelTarget}
+        onOpenChange={(open) => !open && setCancelTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {fmt(t.admin.jobs.cancelTitle, { keyword: cancelTarget?.keyword ?? '' })}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t.admin.jobs.cancelDescription}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void handleCancel()}>
+              {t.admin.jobs.cancel}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
       >
@@ -401,6 +569,38 @@ function JobsPageContent() {
           <AlertDialogFooter>
             <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
             <AlertDialogAction onClick={() => void handleDelete()}>{t.common.delete}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!batchAction}
+        onOpenChange={(open) => !open && !batchBusy && setBatchAction(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {batchAction === 'retry'
+                ? fmt(t.admin.jobs.batchRetryTitle, { n: batchCount })
+                : fmt(t.admin.jobs.batchDeleteTitle, { n: batchCount })}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {batchAction === 'retry'
+                ? t.admin.jobs.batchRetryDescription
+                : t.admin.jobs.batchDeleteDescription}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={batchBusy}>{t.common.cancel}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={batchBusy}
+              onClick={(event) => {
+                event.preventDefault()
+                void handleBatchConfirm()
+              }}
+            >
+              {batchAction === 'retry' ? t.admin.jobs.retry : t.common.delete}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

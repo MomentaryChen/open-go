@@ -139,6 +139,8 @@ model TripDocument {
   content     String?
   contentHash String?
   status      String    @default("pending")
+  /// Crawl failure reason when status is `failed` (HTTP status, timeout, …).
+  error       String?
   fetchedAt   DateTime?
   job         TripJob   @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
@@ -173,6 +175,26 @@ model SettingHistory {
   @@index([createdAt])
 }
 
+/// One row per LLM API call. Recorded even when the response later fails
+/// schema validation — the tokens were still billed. Powers the admin daily
+/// token / estimated-cost view.
+model LlmUsage {
+  id               String   @id @default(cuid())
+  provider         String // 'anthropic' | 'gemini'
+  model            String
+  inputTokens      Int      @default(0)
+  outputTokens     Int      @default(0)
+  cacheReadTokens  Int      @default(0)
+  cacheWriteTokens Int      @default(0)
+  /// Gemini reasoning tokens, billed at the output rate but reported separately;
+  /// Anthropic already folds thinking into outputTokens.
+  thinkingTokens   Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([provider, model, createdAt])
+}
+
 model TripItinerary {
   id        String   @id @default(cuid())
   jobId     String   @unique
@@ -180,5 +202,12 @@ model TripItinerary {
   data      Json
   model     String
   createdAt DateTime @default(now())
+  /// Curation flags for the public explore gallery. A finished job's itinerary
+  /// is auto-included in the gallery; these let an admin turn that feed into a
+  /// showcase wall. `hidden` removes it non-destructively (unlike deleting the
+  /// job); `pinned`/`featured` promote it in the gallery ordering.
+  pinned    Boolean  @default(false)
+  hidden    Boolean  @default(false)
+  featured  Boolean  @default(false)
   job       TripJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
 }

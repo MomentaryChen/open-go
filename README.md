@@ -87,6 +87,7 @@ pnpm dev:frontend
 - `GET /trips/:id/documents` (crawled source documents)
 - `POST /affiliate/events` (public CTA funnel ingest: impression / click / redirect)
 - `GET/POST /settings`, `GET/PATCH/DELETE /settings/:key` (admin-only, `x-admin-key` header)
+- `GET /ops/health` (admin-only system health: DB, browsers, LLM keys, queue, 24h success rate)
 
 ## AI trip planning
 
@@ -99,13 +100,18 @@ structured error (`{ code, message }`). The same rules run client-side for insta
 1. **planning** — the LLM splits the keyword into 6–10 search queries across attraction /
    food / transport / accommodation / itinerary intents, in mixed languages.
 2. **searching** — each query is run against a web search engine; results are de-duplicated
-   and capped per host until the target document count (default 30) is collected.
+   and capped per host until the target document count (default 30) is collected. Hosts on
+   the static social blocklist, auto-unreliable hosts (3+ failures / 0 successes in 30 days),
+   and `trip.hostDenylist` are skipped; `trip.hostAllowlist` overrides those skips.
 3. **crawling** — the pages are fetched concurrently, boilerplate is stripped, and body
    text is stored in `TripDocument`.
 4. **composing** — the LLM reads the crawled corpus and returns a structured day-by-day
    itinerary, where every item cites the source URLs it came from.
 
 Progress is pushed over SSE, so the frontend shows each stage live.
+
+Finished trips are also listed on `/explore`, where visitors can search by keyword /
+title / destination and filter by region before opening a day-by-day plan.
 
 ### Booking & ticket deep links
 
@@ -135,7 +141,27 @@ without a restart; changes are logged as `Trip LLM: provider=… model=…`.
 `/admin` is a password-protected console, separate from the user-facing pages, backed by a
 DB `Setting` table with full CRUD. Values in the DB take precedence over environment
 variables and apply to the **next job without a restart** (reads go through a 30s cache
-that is invalidated on every write).
+that is invalidated on every write). The settings page also has dedicated cards for
+**Pipeline tuning** (search / crawl / cache / queue concurrency) and **LLM model**
+selection so the common `trip.*` knobs are not buried only in the key/value table.
+
+The **Dashboard** at `/admin` composes existing ops APIs into one overview: stuck in-flight
+jobs (`GET /ops/jobs/stats` + optional `POST /ops/jobs/fail-stuck`), high-failure keywords
+(`GET /ops/analytics/keywords`), affiliate CTR (`GET /ops/analytics/affiliate`), and
+storage usage (`GET /ops/retention`). Deep links jump to Jobs, Keywords, Affiliate, and
+Settings for the full tools.
+
+**System health** (`/admin/health`, `GET /ops/health`) is a separate triage page: database
+latency, Playwright search/crawl browser readiness (including a cached Chromium probe),
+Gemini/Anthropic API key presence for the active provider, live queue `running`/`queued`
+counts, and last-24h job success rate — use it when jobs fail at scale.
+
+The **Jobs** page (`/admin/jobs`) lists trip-generation runs with status/keyword filters.
+After an outage leaves a wave of failures, filter to `Failed` (and optionally a keyword)
+then use **Retry matching** / **Delete matching** — each call acts on up to 100 filtered
+rows and requires a status or keyword filter so “all jobs” cannot be wiped by accident.
+Stuck in-flight leftovers from a backend restart can be bulk-marked failed first via the
+stuck banner.
 
 Auth is deliberately lightweight: `ADMIN_PASSWORD` is checked by a login form which sets an
 httpOnly cookie (a salted SHA-256 digest — the plaintext never reaches the browser);
@@ -143,6 +169,20 @@ httpOnly cookie (a salted SHA-256 digest — the plaintext never reaches the bro
 server routes that forward to the backend with an `x-admin-key` header, so the shared
 secret also never leaves the server. The backend guards `/settings` with the same header
 and fails closed when `ADMIN_PASSWORD` is unset.
+
+The jobs console (`/admin/jobs`) can cancel a queued or in-flight trip job without deleting
+it: `POST /ops/jobs/:id/cancel` drops the job from the backlog or signals the running
+pipeline to stop at the next stage/crawl checkpoint, then marks the row `cancelled` so it
+leaves the active list but remains available to retry or inspect.
+
+Keyword analytics at `/admin/keywords` shows demand, failure rate, content gaps, crawl-host
+health, and a top-N failure-reason panel grouped from existing `TripJob.error` text
+(`GET /ops/analytics/failure-reasons`) — no separate error-code table.
+
+Job debugging lives at `/admin/jobs/[id]`: traveller preferences (when set), a link that
+opens the public `/trip/[jobId]` page, the job-level failure message, and per-document
+crawl errors (stored on `TripDocument.error` for crawls run after that column was added;
+older failed rows show status only).
 
 Seeded settings:
 
@@ -153,6 +193,9 @@ Seeded settings:
 | `trip.cacheTtlDays` | `7` | Days a finished job satisfies the same keyword again (`0` disables). |
 | `trip.resultsPerQuery` | `12` | Max results taken from a single search query. |
 | `trip.maxDocumentsPerHost` | `3` | Max documents from one host, to keep sources diverse. |
+| `trip.hostAllowlist` | `[]` | JSON array of hosts the crawler must never skip (overrides auto-block and the static social blocklist). Edit from `/admin/keywords` → Source hosts. |
+| `trip.hostDenylist` | `[]` | JSON array of hosts the crawler must always skip (force-block junk sources). Edit from `/admin/keywords` → Source hosts. |
+| `trip.maxConcurrentJobs` | `3` | Whole pipelines allowed to run at once. |
 | `trip.llmProvider` | `gemini` | `gemini` or `anthropic`; the router falls back to env on bad values. |
 | `trip.llmModel` | `auto` | `auto` = the provider's default model; or any explicit model name. |
 | `trip.plannerSystemPrompt` | built-in | System prompt for the keyword planner (blank = code default). |

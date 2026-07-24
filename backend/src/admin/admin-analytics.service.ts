@@ -1,5 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  hostOverride,
+  isHostBlocked,
+  listCoversHost,
+  STATIC_BLOCKED_HOSTS,
+} from '../trip/host-policy';
+import { HostPolicyService } from '../trip/host-policy.service';
+import { estimateCostUsd } from '../trip/llm/llm-pricing';
+import type { LlmTokenTotals } from '../trip/llm/llm-pricing';
 
 type KeywordRow = {
   keyword: string;
@@ -19,7 +28,10 @@ type TrendRow = {
 
 @Injectable()
 export class AdminAnalyticsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly hostPolicy: HostPolicyService,
+  ) {}
 
   /**
    * Keyword demand and reliability, derived from TripJob rather than
@@ -67,6 +79,51 @@ export class AdminAnalyticsService {
     });
   }
 
+  /**
+   * Top failure reasons from TripJob.error (exact string grouping).
+   * No taxonomy table — raw messages cluster naturally for stable pipeline errors
+   * (search blocked, crawl empty, LLM timeouts, etc.).
+   */
+  async failureReasons(days: number, limit: number) {
+    const since = this.daysAgo(days);
+
+    const [rows, totalRows] = await Promise.all([
+      this.prisma.$queryRaw<Array<{ error: string; count: bigint }>>`
+        SELECT error, COUNT(*) AS count
+        FROM "TripJob"
+        WHERE "createdAt" >= ${since}
+          AND status = 'failed'
+          AND error IS NOT NULL
+          AND error <> ''
+        GROUP BY error
+        ORDER BY count DESC
+        LIMIT ${limit}
+      `,
+      this.prisma.$queryRaw<Array<{ total: bigint }>>`
+        SELECT COUNT(*) AS total
+        FROM "TripJob"
+        WHERE "createdAt" >= ${since}
+          AND status = 'failed'
+          AND error IS NOT NULL
+          AND error <> ''
+      `,
+    ]);
+
+    const totalFailed = Number(totalRows[0]?.total ?? 0);
+
+    return {
+      totalFailed,
+      reasons: rows.map((row) => {
+        const count = Number(row.count);
+        return {
+          error: row.error,
+          count,
+          share: totalFailed ? count / totalFailed : 0,
+        };
+      }),
+    };
+  }
+
   /** Daily job volume with the done/failed split, oldest day first. */
   async trend(days: number) {
     const since = this.daysAgo(days);
@@ -99,7 +156,12 @@ export class AdminAnalyticsService {
     const since = this.daysAgo(days);
 
     const rows = await this.prisma.$queryRaw<
-      Array<{ keyword: string; jobs: bigint; avg_documents: number | null; last_at: Date }>
+      Array<{
+        keyword: string;
+        jobs: bigint;
+        avg_documents: number | null;
+        last_at: Date;
+      }>
     >`
       SELECT
         j.keyword,
@@ -127,9 +189,15 @@ export class AdminAnalyticsService {
     }));
   }
 
-  /** Hosts the crawler keeps hitting, with their success rate. */
+  /** Hosts the crawler keeps hitting, with their success rate and policy. */
   async hosts(days: number, limit: number) {
     const since = this.daysAgo(days);
+    const [policy, unreliableHosts] = await Promise.all([
+      this.hostPolicy.getLists(),
+      this.loadUnreliableHosts(),
+    ]);
+    const allowlist = new Set(policy.allowlist);
+    const denylist = new Set(policy.denylist);
 
     const rows = await this.prisma.$queryRaw<
       Array<{ host: string; attempts: bigint; fetched: bigint }>
@@ -147,18 +215,96 @@ export class AdminAnalyticsService {
       LIMIT ${limit}
     `;
 
-    return rows.map((row) => {
+    const seen = new Set<string>();
+    const mapped = rows.map((row) => {
       const attempts = Number(row.attempts);
       const fetched = Number(row.fetched);
-      return {
-        host: row.host,
+      // UI badge for this analytics window; crawl still uses loadUnreliableHosts.
+      const autoBlocked = attempts >= 3 && fetched === 0;
+      seen.add(row.host);
+      return this.hostRow(row.host, {
         attempts,
         fetched,
-        successRate: attempts ? fetched / attempts : 0,
-        // Mirrors TripService.loadUnreliableHosts: 3+ tries, zero successes.
-        autoBlocked: attempts >= 3 && fetched === 0,
-      };
+        autoBlocked,
+        policy,
+        allowlist,
+        denylist,
+        unreliableHosts,
+      });
     });
+
+    // Surface manually listed hosts even when they have no recent crawl stats.
+    for (const host of [...policy.allowlist, ...policy.denylist]) {
+      if (seen.has(host)) continue;
+      mapped.push(
+        this.hostRow(host, {
+          attempts: 0,
+          fetched: 0,
+          autoBlocked: false,
+          policy,
+          allowlist,
+          denylist,
+          unreliableHosts,
+        }),
+      );
+      seen.add(host);
+    }
+
+    return mapped;
+  }
+
+  private hostRow(
+    host: string,
+    opts: {
+      attempts: number;
+      fetched: number;
+      autoBlocked: boolean;
+      policy: { allowlist: string[]; denylist: string[] };
+      allowlist: Set<string>;
+      denylist: Set<string>;
+      unreliableHosts: Set<string>;
+    },
+  ) {
+    const allowMatch = listCoversHost(host, opts.policy.allowlist);
+    const denyMatch = listCoversHost(host, opts.policy.denylist);
+    const staticBlocked = listCoversHost(host, STATIC_BLOCKED_HOSTS);
+    return {
+      host,
+      attempts: opts.attempts,
+      fetched: opts.fetched,
+      successRate: opts.attempts ? opts.fetched / opts.attempts : 0,
+      autoBlocked: opts.autoBlocked,
+      override: hostOverride(host, opts.policy),
+      allowMatch,
+      denyMatch,
+      staticBlocked,
+      effectivelyBlocked: isHostBlocked(host, {
+        allowlist: opts.allowlist,
+        denylist: opts.denylist,
+        unreliable: opts.unreliableHosts,
+        staticBlocked: STATIC_BLOCKED_HOSTS,
+      }),
+    };
+  }
+
+  /**
+   * Same window and rules as TripService.loadUnreliableHosts so the admin
+   * “effectively blocked” flag matches crawl URL selection.
+   */
+  private async loadUnreliableHosts(): Promise<Set<string>> {
+    try {
+      const rows = await this.prisma.$queryRaw<Array<{ host: string }>>`
+        SELECT regexp_replace(split_part(split_part(url, '//', 2), '/', 1), '^www\.', '') AS host
+        FROM "TripDocument"
+        WHERE "fetchedAt" >= NOW() - INTERVAL '30 days'
+        GROUP BY 1
+        HAVING COUNT(*) >= 3
+           AND COUNT(*) FILTER (WHERE status = 'fetched') = 0
+      `;
+      return new Set(rows.map((row) => row.host));
+    } catch {
+      return new Set();
+    }
   }
 
   /**
@@ -169,9 +315,7 @@ export class AdminAnalyticsService {
     const since = this.daysAgo(days);
 
     const [totals, byPartner, byCategory, trend, recent] = await Promise.all([
-      this.prisma.$queryRaw<
-        Array<{ event: string; count: bigint }>
-      >`
+      this.prisma.$queryRaw<Array<{ event: string; count: bigint }>>`
         SELECT event, COUNT(*) AS count
         FROM "AffiliateEvent"
         WHERE "createdAt" >= ${since}
@@ -256,7 +400,11 @@ export class AdminAnalyticsService {
     const clicks = countByEvent.cta_click ?? 0;
     const redirects = countByEvent.outbound_redirect ?? 0;
 
-    const funnelRow = (impressionsN: number, clicksN: number, redirectsN: number) => ({
+    const funnelRow = (
+      impressionsN: number,
+      clicksN: number,
+      redirectsN: number,
+    ) => ({
       impressions: impressionsN,
       clicks: clicksN,
       redirects: redirectsN,
@@ -299,6 +447,119 @@ export class AdminAnalyticsService {
         keyword: row.job?.keyword ?? null,
         createdAt: row.createdAt,
       })),
+    };
+  }
+
+  /**
+   * Daily LLM token burn and estimated USD cost. Aggregated per
+   * (day, provider, model) in SQL so cost can be priced per model in TS, then
+   * rolled up into totals / per-model / per-day views. estimatedCostUsd is
+   * null when every model in the bucket is missing from the pricing table.
+   */
+  async llmUsage(days: number) {
+    const since = this.daysAgo(days);
+
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        day: Date;
+        provider: string;
+        model: string;
+        calls: bigint;
+        input_tokens: bigint;
+        output_tokens: bigint;
+        cache_read_tokens: bigint;
+        cache_write_tokens: bigint;
+        thinking_tokens: bigint;
+      }>
+    >`
+      SELECT
+        DATE_TRUNC('day', "createdAt") AS day,
+        provider,
+        model,
+        COUNT(*) AS calls,
+        SUM("inputTokens") AS input_tokens,
+        SUM("outputTokens") AS output_tokens,
+        SUM("cacheReadTokens") AS cache_read_tokens,
+        SUM("cacheWriteTokens") AS cache_write_tokens,
+        SUM("thinkingTokens") AS thinking_tokens
+      FROM "LlmUsage"
+      WHERE "createdAt" >= ${since}
+      GROUP BY 1, 2, 3
+      ORDER BY 1 ASC
+    `;
+
+    type Bucket = LlmTokenTotals & {
+      calls: number;
+      estimatedCostUsd: number | null;
+    };
+    const emptyBucket = (): Bucket => ({
+      calls: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      thinkingTokens: 0,
+      estimatedCostUsd: null,
+    });
+    const addTo = (bucket: Bucket, sample: Bucket) => {
+      bucket.calls += sample.calls;
+      bucket.inputTokens += sample.inputTokens;
+      bucket.outputTokens += sample.outputTokens;
+      bucket.cacheReadTokens += sample.cacheReadTokens;
+      bucket.cacheWriteTokens += sample.cacheWriteTokens;
+      bucket.thinkingTokens += sample.thinkingTokens;
+      if (sample.estimatedCostUsd !== null) {
+        bucket.estimatedCostUsd =
+          (bucket.estimatedCostUsd ?? 0) + sample.estimatedCostUsd;
+      }
+    };
+
+    const totals = emptyBucket();
+    const byModel = new Map<
+      string,
+      Bucket & { provider: string; model: string }
+    >();
+    const daily = new Map<string, Bucket & { day: Date }>();
+
+    for (const row of rows) {
+      const tokens: LlmTokenTotals = {
+        inputTokens: Number(row.input_tokens),
+        outputTokens: Number(row.output_tokens),
+        cacheReadTokens: Number(row.cache_read_tokens),
+        cacheWriteTokens: Number(row.cache_write_tokens),
+        thinkingTokens: Number(row.thinking_tokens),
+      };
+      const sample: Bucket = {
+        ...tokens,
+        calls: Number(row.calls),
+        estimatedCostUsd: estimateCostUsd(row.model, tokens),
+      };
+
+      addTo(totals, sample);
+
+      const modelKey = `${row.provider}/${row.model}`;
+      const modelBucket =
+        byModel.get(modelKey) ??
+        Object.assign(emptyBucket(), {
+          provider: row.provider,
+          model: row.model,
+        });
+      addTo(modelBucket, sample);
+      byModel.set(modelKey, modelBucket);
+
+      const dayKey = row.day.toISOString();
+      const dayBucket =
+        daily.get(dayKey) ?? Object.assign(emptyBucket(), { day: row.day });
+      addTo(dayBucket, sample);
+      daily.set(dayKey, dayBucket);
+    }
+
+    return {
+      totals,
+      byModel: [...byModel.values()].sort(
+        (a, b) => (b.estimatedCostUsd ?? 0) - (a.estimatedCostUsd ?? 0),
+      ),
+      daily: [...daily.values()],
     };
   }
 

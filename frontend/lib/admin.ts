@@ -131,6 +131,13 @@ export function revertSetting(key: string, historyId: string) {
 // Job monitoring
 // ---------------------------------------------------------------------------
 
+/** Explore-gallery curation state for a finished job's itinerary. */
+export type JobCuration = {
+  pinned: boolean
+  hidden: boolean
+  featured: boolean
+}
+
 export type JobSummary = {
   id: string
   keyword: string
@@ -145,6 +152,8 @@ export type JobSummary = {
   queryCount: number
   hasItinerary: boolean
   model: string | null
+  /** Null for jobs without an itinerary (not gallery-eligible). */
+  curation: JobCuration | null
 }
 
 export type JobListResult = {
@@ -178,12 +187,25 @@ export type JobDocument = {
   title: string | null
   snippet: string | null
   status: string
+  /** Crawl failure reason when status is `failed`; null for older rows. */
+  error: string | null
   fetchedAt: string | null
+}
+
+export type JobPreferences = {
+  durationDays: number | null
+  companions: string | null
+  pace: string | null
+  budget: string | null
+  mustVisit: string[]
+  avoid: string[]
 }
 
 export type JobDetail = {
   id: string
   keyword: string
+  /** Structured traveller preferences; null for keyword-only / legacy jobs. */
+  preferences: JobPreferences | null
   status: string
   progress: number
   message: string | null
@@ -206,6 +228,9 @@ export type JobDetail = {
     data: unknown
     model: string
     createdAt: string
+    pinned: boolean
+    hidden: boolean
+    featured: boolean
   } | null
 }
 
@@ -238,10 +263,31 @@ export function retryJob(id: string) {
   )
 }
 
+export function cancelJob(id: string) {
+  return request<{
+    ok: boolean
+    status: 'cancelled'
+    queue: 'queued' | 'running' | 'not_found'
+  }>(`/api/admin/ops/jobs/${encodeURIComponent(id)}/cancel`, {
+    method: 'POST',
+  })
+}
+
 export function deleteJob(id: string) {
   return request<{ ok: boolean }>(
     `/api/admin/ops/jobs/${encodeURIComponent(id)}`,
     { method: 'DELETE' },
+  )
+}
+
+/**
+ * Sets explore-gallery curation flags on a finished job's itinerary. A partial
+ * patch is allowed — only the provided flags change. Returns the new state.
+ */
+export function setJobCuration(id: string, patch: Partial<JobCuration>) {
+  return request<JobCuration>(
+    `/api/admin/ops/jobs/${encodeURIComponent(id)}/curation`,
+    { method: 'PATCH', body: JSON.stringify(patch) },
   )
 }
 
@@ -250,6 +296,37 @@ export function failStuckJobs(olderThanMinutes: number) {
     '/api/admin/ops/jobs/fail-stuck',
     { method: 'POST', body: JSON.stringify({ olderThanMinutes }) },
   )
+}
+
+export type JobBatchFilter = {
+  status?: string
+  keyword?: string
+  limit?: number
+}
+
+export function batchRetryJobs(filter: JobBatchFilter) {
+  return request<{
+    matched: number
+    retried: number
+    truncated: boolean
+    limit: number
+    jobs: Array<{ sourceId: string; jobId: string; keyword: string }>
+  }>('/api/admin/ops/jobs/batch-retry', {
+    method: 'POST',
+    body: JSON.stringify(filter),
+  })
+}
+
+export function batchDeleteJobs(filter: JobBatchFilter) {
+  return request<{
+    matched: number
+    deleted: number
+    truncated: boolean
+    limit: number
+  }>('/api/admin/ops/jobs/batch-delete', {
+    method: 'POST',
+    body: JSON.stringify(filter),
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -281,17 +358,46 @@ export type ContentGap = {
   lastAt: string
 }
 
+export type HostOverride = 'allow' | 'deny' | null
+
 export type HostStat = {
   host: string
   attempts: number
   fetched: number
   successRate: number
   autoBlocked: boolean
+  override: HostOverride
+  allowMatch: boolean
+  denyMatch: boolean
+  staticBlocked: boolean
+  effectivelyBlocked: boolean
+}
+
+export type HostPolicy = {
+  allowlist: string[]
+  denylist: string[]
+}
+
+export type FailureReason = {
+  error: string
+  count: number
+  share: number
+}
+
+export type FailureReasons = {
+  totalFailed: number
+  reasons: FailureReason[]
 }
 
 export function getKeywordStats(days = 30, limit = 50) {
   return request<KeywordStat[]>(
     `/api/admin/ops/analytics/keywords?days=${days}&limit=${limit}`,
+  )
+}
+
+export function getFailureReasons(days = 30, limit = 10) {
+  return request<FailureReasons>(
+    `/api/admin/ops/analytics/failure-reasons?days=${days}&limit=${limit}`,
   )
 }
 
@@ -307,6 +413,51 @@ export function getContentGaps(days = 30, maxDocuments = 5) {
 
 export function getHostStats(days = 30) {
   return request<HostStat[]>(`/api/admin/ops/analytics/hosts?days=${days}`)
+}
+
+export function getHostPolicy() {
+  return request<HostPolicy>('/api/admin/ops/hosts/policy')
+}
+
+export function setHostOverride(
+  host: string,
+  action: 'allow' | 'deny' | 'clear',
+) {
+  return request<{
+    host: string
+    override: HostOverride
+    lists: HostPolicy
+  }>('/api/admin/ops/hosts/override', {
+    method: 'PUT',
+    body: JSON.stringify({ host, action }),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// LLM usage / cost analytics
+// ---------------------------------------------------------------------------
+
+export type LlmUsageBucket = {
+  calls: number
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  thinkingTokens: number
+  /** Null when the model is missing from the backend pricing table. */
+  estimatedCostUsd: number | null
+}
+
+export type LlmUsageAnalytics = {
+  totals: LlmUsageBucket
+  byModel: Array<LlmUsageBucket & { provider: string; model: string }>
+  daily: Array<LlmUsageBucket & { day: string }>
+}
+
+export function getLlmUsage(days = 30) {
+  return request<LlmUsageAnalytics>(
+    `/api/admin/ops/analytics/llm-usage?days=${days}`,
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -404,6 +555,53 @@ export function runRetention() {
   return request<RetentionResult>('/api/admin/ops/retention/run', {
     method: 'POST',
   })
+}
+
+// ---------------------------------------------------------------------------
+// System health
+// ---------------------------------------------------------------------------
+
+export type HealthStatus = 'ok' | 'warn' | 'error'
+
+export type SystemHealth = {
+  status: HealthStatus
+  checkedAt: string
+  database: {
+    status: HealthStatus
+    latencyMs: number
+    detail?: string
+  }
+  browsers: {
+    status: HealthStatus
+    detail?: string
+    search: { enabled: boolean; launched: boolean }
+    crawlFallback: { enabled: boolean; launched: boolean }
+    chromium: {
+      available: boolean
+      version: string | null
+      detail?: string
+    }
+  }
+  llm: {
+    status: HealthStatus
+    detail?: string
+    activeProvider: string
+    activeModel: string
+    keys: { gemini: boolean; anthropic: boolean }
+  }
+  queue: { running: number; queued: number }
+  last24h: {
+    status: HealthStatus
+    detail?: string
+    total: number
+    done: number
+    failed: number
+    successRate: number | null
+  }
+}
+
+export function getSystemHealth() {
+  return request<SystemHealth>('/api/admin/ops/health')
 }
 
 export async function adminLogin(password: string) {

@@ -213,8 +213,16 @@ export function TripPlanner() {
           setHistory(markTripHistoryDone(jobId))
           window.history.replaceState(null, '', sharePath(jobId))
         }
-        if (payload.status === 'failed') setHistory(markTripHistoryDone(jobId))
-        if (payload.status === 'done' || payload.status === 'failed') stopStream()
+        if (payload.status === 'failed' || payload.status === 'cancelled') {
+          setHistory(markTripHistoryDone(jobId))
+        }
+        if (
+          payload.status === 'done' ||
+          payload.status === 'failed' ||
+          payload.status === 'cancelled'
+        ) {
+          stopStream()
+        }
       }
 
       source.onerror = () => {
@@ -223,7 +231,10 @@ export function TripPlanner() {
         // the backend was still happily working on.
         if (source.readyState !== EventSource.CLOSED) {
           setEvent((current) =>
-            current && current.status !== 'done'
+            current &&
+            current.status !== 'done' &&
+            current.status !== 'failed' &&
+            current.status !== 'cancelled'
               ? { ...current, message: t.tripPlanner.reconnecting }
               : current,
           )
@@ -271,11 +282,11 @@ export function TripPlanner() {
         settleDone(entry.jobId, job.itinerary.data, t.tripPlanner.loadedPrevious)
         return
       }
-      if (job.status === 'failed') {
+      if (job.status === 'failed' || job.status === 'cancelled') {
         setHistory(markTripHistoryDone(entry.jobId))
         setEvent({
           jobId: entry.jobId,
-          status: 'failed',
+          status: job.status === 'cancelled' ? 'cancelled' : 'failed',
           progress: 100,
           error: job.error ?? t.tripPlanner.planFailed,
         })
@@ -408,7 +419,11 @@ export function TripPlanner() {
     [loadStored, resume],
   )
 
-  const running = event !== null && event.status !== 'done' && event.status !== 'failed'
+  const running =
+    event !== null &&
+    event.status !== 'done' &&
+    event.status !== 'failed' &&
+    event.status !== 'cancelled'
   const showHistoryMenu = historyOpen && history.length > 0
 
   return (

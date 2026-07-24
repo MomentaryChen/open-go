@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { Injectable, Logger } from '@nestjs/common';
 import * as z from 'zod/v4';
+import { LlmUsageService } from './llm-usage.service';
 import { LlmRequest } from './llm.types';
 
 /** Gemini exposes thinking depth as a token budget; -1 lets the model decide. */
@@ -16,6 +17,8 @@ export class GeminiLlmService {
   private readonly logger = new Logger(GeminiLlmService.name);
   private cached?: GoogleGenAI;
 
+  constructor(private readonly usage: LlmUsageService) {}
+
   async generate<T extends z.ZodType>(
     model: string,
     request: LlmRequest<T>,
@@ -23,6 +26,22 @@ export class GeminiLlmService {
     const response = await this.withRetry(() =>
       this.generateOnce(model, request),
     );
+
+    // Record before the content checks: even a truncated or empty response
+    // was billed. Gemini's promptTokenCount includes cached tokens, so
+    // subtract them to match Anthropic's "input excludes cache" convention.
+    const meta = response.usageMetadata;
+    if (meta) {
+      const cached = meta.cachedContentTokenCount ?? 0;
+      this.usage.record({
+        provider: this.provider,
+        model,
+        inputTokens: Math.max(0, (meta.promptTokenCount ?? 0) - cached),
+        outputTokens: meta.candidatesTokenCount ?? 0,
+        cacheReadTokens: cached,
+        thinkingTokens: meta.thoughtsTokenCount ?? 0,
+      });
+    }
 
     const finishReason = response.candidates?.[0]?.finishReason;
     const text = response.text;

@@ -14,6 +14,8 @@ import { STRUCTURED_LLM } from './llm/llm.types';
 import type { StructuredLlm } from './llm/llm.types';
 import { ItineraryComposerService } from './itinerary-composer.service';
 import type { Itinerary } from './itinerary-composer.service';
+import { isHostBlocked, STATIC_BLOCKED_HOSTS } from './host-policy';
+import { HostPolicyService } from './host-policy.service';
 import { KeywordPlannerService, TripPlan } from './keyword-planner.service';
 import { SearchService } from './search/search.service';
 import { TripEventsService } from './trip-events.service';
@@ -26,31 +28,19 @@ import {
   preferencesCacheKey,
   type TripPreferences,
 } from './trip-preferences';
+import {
+  TripCancelledError,
+  isTripCancelledError,
+} from './trip-cancelled.error';
 import { SearchHit, TripProgressEvent, TripStatus } from './trip.types';
 import type { Prisma } from '@prisma/client';
-
-/**
- * Hosts that consistently reject the crawler (login walls, JS-only shells).
- * Confirmed by crawl history: facebook 0/7, youtube 0/5 fetched. Skipping them
- * at URL-selection time keeps all document slots for fetchable pages.
- */
-const BLOCKED_HOSTS = [
-  'facebook.com',
-  'instagram.com',
-  'youtube.com',
-  'youtu.be',
-  'tiktok.com',
-  'threads.com',
-  'threads.net',
-  'x.com',
-  'twitter.com',
-  'reddit.com',
-];
 
 /** Queued but never started — safe to run from the beginning after a restart. */
 const RESUMABLE_STATUSES = ['pending'];
 /** Caught mid-pipeline by a restart; cannot be continued. */
 const IN_FLIGHT_STATUSES = ['planning', 'searching', 'crawling', 'composing'];
+/** Non-terminal statuses a live job may hold; cancel/fail/publish only touch these. */
+const ACTIVE_STATUSES = [...RESUMABLE_STATUSES, ...IN_FLIGHT_STATUSES];
 /** A pending job older than this is abandoned rather than resumed on boot. */
 const RESUME_WINDOW_MS = 60 * 60 * 1000;
 
@@ -111,6 +101,7 @@ export class TripService implements OnModuleInit {
     private readonly composer: ItineraryComposerService,
     private readonly ingestion: IngestionService,
     private readonly settings: SettingsService,
+    private readonly hostPolicy: HostPolicyService,
     @Inject(STRUCTURED_LLM) private readonly llm: StructuredLlm,
   ) {}
 
@@ -181,7 +172,9 @@ export class TripService implements OnModuleInit {
     });
     // Admission is the queue's call, not ours: it may start immediately or
     // hold the job until a slot frees.
-    this.queue.enqueue(job.id, () => this.run(job.id, keyword, preferences));
+    this.queue.enqueue(job.id, (signal) =>
+      this.run(job.id, keyword, preferences, signal),
+    );
 
     return { job, cached: false };
   }
@@ -227,8 +220,8 @@ export class TripService implements OnModuleInit {
 
       for (const job of resumable) {
         const preferences = normalizePreferences(job.preferences);
-        this.queue.enqueue(job.id, () =>
-          this.run(job.id, job.keyword, preferences),
+        this.queue.enqueue(job.id, (signal) =>
+          this.run(job.id, job.keyword, preferences, signal),
         );
       }
 
@@ -323,23 +316,41 @@ export class TripService implements OnModuleInit {
   }
 
   /**
-   * Public gallery of every finished itinerary, newest first, trimmed to the
-   * fields a browse card needs. The region is the itinerary's `destination`
-   * (the same value POIs are ingested under), so the frontend can group by it
-   * without a separate taxonomy. The full itinerary JSON is read to pull those
-   * few fields and then discarded — fine at this app's scale, and it keeps the
-   * response small for the client.
+   * Public gallery of every finished itinerary, trimmed to the fields a browse
+   * card needs. The region is the itinerary's `destination` (the same value
+   * POIs are ingested under), so the frontend can group by it without a
+   * separate taxonomy. The full itinerary JSON is read to pull those few fields
+   * and then discarded — fine at this app's scale, and it keeps the response
+   * small for the client.
+   *
+   * Curation (admin-set on the itinerary): `hidden` rows are excluded here, and
+   * the order is pinned first, then featured, then newest — so a curated
+   * showcase leads while everything else stays a recency feed.
    */
   async listGallery(limit = 200) {
     const jobs = await this.prisma.tripJob.findMany({
-      where: { status: 'done', itinerary: { isNot: null } },
-      orderBy: { createdAt: 'desc' },
+      // `itinerary: { hidden: false }` also requires the itinerary to exist
+      // (a to-one relation filter never matches a null relation), so it both
+      // drops hidden entries and keeps the "must have an itinerary" guarantee.
+      where: { status: 'done', itinerary: { is: { hidden: false } } },
+      orderBy: [
+        { itinerary: { pinned: 'desc' } },
+        { itinerary: { featured: 'desc' } },
+        { createdAt: 'desc' },
+      ],
       take: limit,
       select: {
         id: true,
         keyword: true,
         createdAt: true,
-        itinerary: { select: { summary: true, data: true } },
+        itinerary: {
+          select: {
+            summary: true,
+            data: true,
+            pinned: true,
+            featured: true,
+          },
+        },
         _count: { select: { documents: true } },
       },
     });
@@ -364,6 +375,8 @@ export class TripService implements OnModuleInit {
           dayCount: days,
           summary: job.itinerary?.summary ?? '',
           sourceCount: job._count.documents,
+          pinned: job.itinerary?.pinned ?? false,
+          featured: job.itinerary?.featured ?? false,
         },
       ];
     });
@@ -388,20 +401,30 @@ export class TripService implements OnModuleInit {
     jobId: string,
     keyword: string,
     preferences: TripPreferences = EMPTY_PREFERENCES,
+    signal: AbortSignal = new AbortController().signal,
   ) {
     try {
+      this.throwIfCancelled(signal);
       const cfg = await this.resolveRuntimeConfig();
-      const plan = await this.runPlanning(jobId, keyword, preferences);
-      const urls = await this.runSearch(jobId, plan, cfg);
-      const fetched = await this.runCrawl(jobId, urls, cfg);
-      await this.runCompose(jobId, keyword, plan, fetched, preferences);
+      const plan = await this.runPlanning(jobId, keyword, preferences, signal);
+      const urls = await this.runSearch(jobId, plan, cfg, signal);
+      const fetched = await this.runCrawl(jobId, urls, cfg, signal);
+      this.throwIfCancelled(signal);
+      await this.runCompose(jobId, keyword, plan, fetched, preferences, signal);
     } catch (error) {
+      if (isTripCancelledError(error) || signal.aborted) {
+        await this.ensureCancelled(jobId);
+        return;
+      }
       const message = (error as Error).message;
       this.logger.error(`Trip job ${jobId} failed: ${message}`);
-      await this.prisma.tripJob.update({
-        where: { id: jobId },
+      // Conditional write: a concurrent cancel owns the terminal state.
+      const updated = await this.prisma.tripJob.updateMany({
+        where: { id: jobId, status: { in: ACTIVE_STATUSES } },
         data: { status: 'failed', error: message, message: '行程產生失敗' },
       });
+      if (updated.count === 0) return;
+
       this.events.emit({
         jobId,
         status: 'failed',
@@ -412,14 +435,56 @@ export class TripService implements OnModuleInit {
     }
   }
 
+  private throwIfCancelled(signal: AbortSignal) {
+    if (signal.aborted) throw new TripCancelledError();
+  }
+
+  /**
+   * Idempotent: admin cancel writes this first for a fast UI update; the
+   * pipeline also calls it when the AbortSignal fires mid-stage.
+   */
+  private async ensureCancelled(jobId: string) {
+    const current = await this.prisma.tripJob.findUnique({
+      where: { id: jobId },
+      select: { status: true, progress: true },
+    });
+    if (!current) return;
+    if (
+      current.status === 'cancelled' ||
+      current.status === 'done' ||
+      current.status === 'failed'
+    ) {
+      return;
+    }
+
+    await this.prisma.tripJob.update({
+      where: { id: jobId },
+      data: {
+        status: 'cancelled',
+        error: 'Cancelled by admin',
+        message: 'Cancelled',
+      },
+    });
+    this.events.emit({
+      jobId,
+      status: 'cancelled',
+      progress: current.progress,
+      message: 'Cancelled',
+      error: 'Cancelled by admin',
+    });
+  }
+
   private async runPlanning(
     jobId: string,
     keyword: string,
     preferences: TripPreferences,
+    signal: AbortSignal,
   ) {
+    this.throwIfCancelled(signal);
     await this.publish(jobId, 'planning', 5, '正在分解關鍵字…');
 
     const plan = await this.planner.plan(keyword, preferences);
+    this.throwIfCancelled(signal);
     await this.prisma.tripQuery.createMany({
       data: plan.queries.map((query) => ({
         jobId,
@@ -442,18 +507,26 @@ export class TripService implements OnModuleInit {
     jobId: string,
     plan: TripPlan,
     cfg: TripRuntimeConfig,
+    signal: AbortSignal,
   ) {
+    this.throwIfCancelled(signal);
     await this.publish(jobId, 'searching', 15, '正在搜尋網路資料…');
 
     const collected = new Map<string, SearchHit>();
     const perHost = new Map<string, number>();
-    const unreliableHosts = await this.loadUnreliableHosts();
+    const [unreliableHosts, policy] = await Promise.all([
+      this.loadUnreliableHosts(),
+      this.hostPolicy.getLists(),
+    ]);
+    const allowlist = new Set(policy.allowlist);
+    const denylist = new Set(policy.denylist);
     let degraded = false;
 
     // Interleave by language so the early-exit at targetDocuments can't let one
     // language's queries claim every slot before another's ever run.
     const queries = interleaveByLanguage(plan.queries);
     for (const [index, query] of queries.entries()) {
+      this.throwIfCancelled(signal);
       if (collected.size >= cfg.targetDocuments) break;
       if (index > 0) await this.search.throttle();
 
@@ -477,7 +550,16 @@ export class TripService implements OnModuleInit {
 
         const host = this.hostOf(hit.url);
         if (!host) continue;
-        if (this.isBlockedHost(host, unreliableHosts)) continue;
+        if (
+          isHostBlocked(host, {
+            allowlist,
+            denylist,
+            unreliable: unreliableHosts,
+            staticBlocked: STATIC_BLOCKED_HOSTS,
+          })
+        ) {
+          continue;
+        }
         const seenForHost = perHost.get(host) ?? 0;
         if (seenForHost >= cfg.maxDocumentsPerHost) continue;
 
@@ -522,7 +604,9 @@ export class TripService implements OnModuleInit {
     jobId: string,
     urls: string[],
     cfg: TripRuntimeConfig,
+    signal: AbortSignal,
   ) {
+    this.throwIfCancelled(signal);
     const reused = await this.reuseFetchedDocuments(jobId, urls, cfg);
     const pending = urls.filter((url) => !reused.has(url));
 
@@ -539,6 +623,7 @@ export class TripService implements OnModuleInit {
     let ok = reused.size;
 
     await this.crawler.crawlAll(pending, async (result) => {
+      this.throwIfCancelled(signal);
       done += 1;
       if (result.ok) ok += 1;
 
@@ -549,6 +634,11 @@ export class TripService implements OnModuleInit {
           content: result.content ?? null,
           contentHash: result.contentHash ?? null,
           status: result.ok ? 'fetched' : 'failed',
+          // Keep a short reason on failure so admin job detail can explain thin
+          // itineraries; clear on success so reused retries do not leave stale text.
+          error: result.ok
+            ? null
+            : (result.error ?? 'crawl failed').slice(0, 500),
           fetchedAt: new Date(),
         },
       });
@@ -562,7 +652,7 @@ export class TripService implements OnModuleInit {
         crawled: done,
         total: urls.length,
       });
-    }, { concurrency: cfg.crawlConcurrency });
+    }, { concurrency: cfg.crawlConcurrency, signal });
 
     await this.publish(
       jobId,
@@ -629,6 +719,7 @@ export class TripService implements OnModuleInit {
           content: candidate.content,
           contentHash: candidate.contentHash,
           status: 'fetched',
+          error: null,
           fetchedAt: candidate.fetchedAt,
         },
       });
@@ -653,7 +744,9 @@ export class TripService implements OnModuleInit {
       content: string | null;
     }>,
     preferences: TripPreferences,
+    signal: AbortSignal,
   ) {
+    this.throwIfCancelled(signal);
     await this.publish(
       jobId,
       'composing',
@@ -671,6 +764,9 @@ export class TripService implements OnModuleInit {
       preferences,
     );
 
+    // Compose is the longest wait; cancel during it must not flip the row to done.
+    this.throwIfCancelled(signal);
+
     await this.prisma.tripItinerary.create({
       data: {
         jobId,
@@ -680,12 +776,15 @@ export class TripService implements OnModuleInit {
       },
     });
 
-    await this.ingestItineraryPois(jobId, plan, itinerary);
-
-    await this.prisma.tripJob.update({
-      where: { id: jobId },
+    const updated = await this.prisma.tripJob.updateMany({
+      where: { id: jobId, status: { in: ACTIVE_STATUSES } },
       data: { status: 'done', progress: 100, message: '行程已完成' },
     });
+    if (updated.count === 0) {
+      throw new TripCancelledError();
+    }
+
+    await this.ingestItineraryPois(jobId, plan, itinerary);
 
     this.events.emit({
       jobId,
@@ -764,10 +863,15 @@ export class TripService implements OnModuleInit {
     progress: number,
     message: string,
   ) {
-    await this.prisma.tripJob.update({
-      where: { id: jobId },
+    // Conditional write so a concurrent cancel cannot be revived to an
+    // in-progress status by a late publish.
+    const updated = await this.prisma.tripJob.updateMany({
+      where: { id: jobId, status: { in: ACTIVE_STATUSES } },
       data: { status, progress, message },
     });
+    if (updated.count === 0) {
+      throw new TripCancelledError();
+    }
 
     const event: TripProgressEvent = { jobId, status, progress, message };
     this.events.emit(event);
@@ -775,7 +879,7 @@ export class TripService implements OnModuleInit {
 
   /**
    * Hosts the crawler has tried at least 3 times in the last 30 days without a
-   * single success — learned counterparts to the static BLOCKED_HOSTS list.
+   * single success — learned counterparts to STATIC_BLOCKED_HOSTS.
    */
   private async loadUnreliableHosts(): Promise<Set<string>> {
     try {
@@ -794,13 +898,6 @@ export class TripService implements OnModuleInit {
       );
       return new Set();
     }
-  }
-
-  private isBlockedHost(host: string, unreliable: Set<string>) {
-    if (unreliable.has(host)) return true;
-    return BLOCKED_HOSTS.some(
-      (blocked) => host === blocked || host.endsWith(`.${blocked}`),
-    );
   }
 
   private hostOf(url: string) {

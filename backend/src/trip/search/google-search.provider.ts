@@ -34,6 +34,14 @@ export class GoogleSearchProvider implements SearchProvider, OnModuleDestroy {
   private context?: BrowserContext;
   private starting?: Promise<BrowserContext>;
 
+  /** Snapshot for the admin health panel — does not launch the browser. */
+  status() {
+    return {
+      enabled: tripConfig.useBrowserSearch,
+      launched: Boolean(this.browser?.isConnected()),
+    };
+  }
+
   async search(query: string, limit: number): Promise<SearchHit[]> {
     if (!tripConfig.useBrowserSearch) {
       throw new SearchBlockedError('Browser-based search is disabled');
