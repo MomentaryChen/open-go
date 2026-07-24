@@ -139,6 +139,8 @@ model TripDocument {
   content     String?
   contentHash String?
   status      String    @default("pending")
+  /// Crawl failure reason when status is `failed` (HTTP status, timeout, …).
+  error       String?
   fetchedAt   DateTime?
   job         TripJob   @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
