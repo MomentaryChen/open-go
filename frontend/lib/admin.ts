@@ -251,6 +251,16 @@ export function retryJob(id: string) {
   )
 }
 
+export function cancelJob(id: string) {
+  return request<{
+    ok: boolean
+    status: 'cancelled'
+    queue: 'queued' | 'running' | 'not_found'
+  }>(`/api/admin/ops/jobs/${encodeURIComponent(id)}/cancel`, {
+    method: 'POST',
+  })
+}
+
 export function deleteJob(id: string) {
   return request<{ ok: boolean }>(
     `/api/admin/ops/jobs/${encodeURIComponent(id)}`,
@@ -325,17 +335,46 @@ export type ContentGap = {
   lastAt: string
 }
 
+export type HostOverride = 'allow' | 'deny' | null
+
 export type HostStat = {
   host: string
   attempts: number
   fetched: number
   successRate: number
   autoBlocked: boolean
+  override: HostOverride
+  allowMatch: boolean
+  denyMatch: boolean
+  staticBlocked: boolean
+  effectivelyBlocked: boolean
+}
+
+export type HostPolicy = {
+  allowlist: string[]
+  denylist: string[]
+}
+
+export type FailureReason = {
+  error: string
+  count: number
+  share: number
+}
+
+export type FailureReasons = {
+  totalFailed: number
+  reasons: FailureReason[]
 }
 
 export function getKeywordStats(days = 30, limit = 50) {
   return request<KeywordStat[]>(
     `/api/admin/ops/analytics/keywords?days=${days}&limit=${limit}`,
+  )
+}
+
+export function getFailureReasons(days = 30, limit = 10) {
+  return request<FailureReasons>(
+    `/api/admin/ops/analytics/failure-reasons?days=${days}&limit=${limit}`,
   )
 }
 
@@ -351,6 +390,24 @@ export function getContentGaps(days = 30, maxDocuments = 5) {
 
 export function getHostStats(days = 30) {
   return request<HostStat[]>(`/api/admin/ops/analytics/hosts?days=${days}`)
+}
+
+export function getHostPolicy() {
+  return request<HostPolicy>('/api/admin/ops/hosts/policy')
+}
+
+export function setHostOverride(
+  host: string,
+  action: 'allow' | 'deny' | 'clear',
+) {
+  return request<{
+    host: string
+    override: HostOverride
+    lists: HostPolicy
+  }>('/api/admin/ops/hosts/override', {
+    method: 'PUT',
+    body: JSON.stringify({ host, action }),
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -475,6 +532,53 @@ export function runRetention() {
   return request<RetentionResult>('/api/admin/ops/retention/run', {
     method: 'POST',
   })
+}
+
+// ---------------------------------------------------------------------------
+// System health
+// ---------------------------------------------------------------------------
+
+export type HealthStatus = 'ok' | 'warn' | 'error'
+
+export type SystemHealth = {
+  status: HealthStatus
+  checkedAt: string
+  database: {
+    status: HealthStatus
+    latencyMs: number
+    detail?: string
+  }
+  browsers: {
+    status: HealthStatus
+    detail?: string
+    search: { enabled: boolean; launched: boolean }
+    crawlFallback: { enabled: boolean; launched: boolean }
+    chromium: {
+      available: boolean
+      version: string | null
+      detail?: string
+    }
+  }
+  llm: {
+    status: HealthStatus
+    detail?: string
+    activeProvider: string
+    activeModel: string
+    keys: { gemini: boolean; anthropic: boolean }
+  }
+  queue: { running: number; queued: number }
+  last24h: {
+    status: HealthStatus
+    detail?: string
+    total: number
+    done: number
+    failed: number
+    successRate: number | null
+  }
+}
+
+export function getSystemHealth() {
+  return request<SystemHealth>('/api/admin/ops/health')
 }
 
 export async function adminLogin(password: string) {
