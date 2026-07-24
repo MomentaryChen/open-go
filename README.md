@@ -103,6 +103,9 @@ pnpm dev:frontend
 
 Progress is pushed over SSE, so the frontend shows each stage live.
 
+Finished trips are also listed on `/explore`, where visitors can search by keyword /
+title / destination and filter by region before opening a day-by-day plan.
+
 ### Booking & ticket deep links
 
 Finished itineraries surface outbound CTAs (visually separate from cited sources):

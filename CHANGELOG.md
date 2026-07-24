@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Added keyword search on the public trip explorer (`/explore`): filter finished itineraries by keyword, title, destination, or summary, combined with the existing region tabs.
 - Added top-N failure-reason aggregation on `/admin/keywords`: `GET /ops/analytics/failure-reasons` groups failed `TripJob.error` strings (exact match) so operators can see clusters like search blocked, empty crawl, or LLM timeouts without a new taxonomy table.
 - Added filter-based batch retry/delete on the admin Jobs page (`POST /ops/jobs/batch-retry`, `POST /ops/jobs/batch-delete`): after setting a status and/or keyword filter (e.g. all `failed` after a search outage), retry or delete up to 100 matching jobs in one confirmation instead of clicking row by row.
 - Enriched admin job detail (`/admin/jobs/[id]`): shows traveller preferences, a one-click link to the public `/trip/[jobId]` page, and per-document crawl failure reasons (persisted on `TripDocument.error` for new crawls).
