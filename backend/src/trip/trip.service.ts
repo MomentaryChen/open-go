@@ -63,6 +63,40 @@ type TripRuntimeConfig = {
   maxDocumentsPerHost: number;
 };
 
+/**
+ * Reorder queries so languages alternate, round-robin across language buckets.
+ * runSearch stops the moment `targetDocuments` is reached, so in the planner's
+ * own order the queries it happens to list first fill every slot and the rest —
+ * often an entire language — never run (observed: 4 English queries left at
+ * resultCount 0 because 4 earlier Chinese ones already hit the quota). Bucketing
+ * by primary subtag ("zh-TW" and "zh" share a bucket; empty/unknown tags share
+ * one) and taking one query from each bucket per pass guarantees every language
+ * contributes candidates before the quota closes the search.
+ */
+function interleaveByLanguage<T extends { language?: string | null }>(
+  queries: T[],
+): T[] {
+  const buckets = new Map<string, T[]>();
+  for (const query of queries) {
+    const key = (query.language ?? '').toLowerCase().split('-')[0];
+    const bucket = buckets.get(key);
+    if (bucket) bucket.push(query);
+    else buckets.set(key, [query]);
+  }
+
+  const groups = [...buckets.values()];
+  if (groups.length <= 1) return queries;
+
+  const maxLen = Math.max(...groups.map((group) => group.length));
+  const interleaved: T[] = [];
+  for (let round = 0; round < maxLen; round += 1) {
+    for (const group of groups) {
+      if (round < group.length) interleaved.push(group[round]);
+    }
+  }
+  return interleaved;
+}
+
 @Injectable()
 export class TripService implements OnModuleInit {
   private readonly logger = new Logger(TripService.name);
@@ -416,7 +450,10 @@ export class TripService implements OnModuleInit {
     const unreliableHosts = await this.loadUnreliableHosts();
     let degraded = false;
 
-    for (const [index, query] of plan.queries.entries()) {
+    // Interleave by language so the early-exit at targetDocuments can't let one
+    // language's queries claim every slot before another's ever run.
+    const queries = interleaveByLanguage(plan.queries);
+    for (const [index, query] of queries.entries()) {
       if (collected.size >= cfg.targetDocuments) break;
       if (index > 0) await this.search.throttle();
 
@@ -454,7 +491,7 @@ export class TripService implements OnModuleInit {
       });
 
       const progress =
-        15 + Math.round((20 * (index + 1)) / plan.queries.length);
+        15 + Math.round((20 * (index + 1)) / queries.length);
       await this.publish(
         jobId,
         'searching',
