@@ -336,6 +336,7 @@ export const en: Dictionary = {
       composing: 'Composing',
       done: 'Done',
       failed: 'Failed',
+      cancelled: 'Cancelled',
     },
 
     range: {
@@ -360,6 +361,7 @@ export const en: Dictionary = {
         done: 'Done',
         failed: 'Failed',
         pending: 'Queued',
+        cancelled: 'Cancelled',
       },
       markAllFailed: 'Mark all as failed',
       stat: {
@@ -399,6 +401,12 @@ export const en: Dictionary = {
       empty: 'No jobs match the filters',
       retry: 'Retry',
       retryAria: 'Retry {keyword}',
+      cancel: 'Cancel',
+      cancelAria: 'Cancel {keyword}',
+      cancelTitle: 'Cancel job “{keyword}”?',
+      cancelDescription:
+        'Stops the pipeline at the next checkpoint. The job stays in history as Cancelled and can still be retried or deleted.',
+      cancelled: 'Cancelled “{keyword}”',
       deleteAria: 'Delete {keyword}',
       deleteTitle: 'Delete job “{keyword}”?',
       deleteDescription:
@@ -414,6 +422,8 @@ export const en: Dictionary = {
       failReason: 'Failure reason',
       retrying: 'Running…',
       retry: 'Retry',
+      cancelling: 'Cancelling…',
+      cancel: 'Cancel job',
       backToList: 'Back to job list',
       openFrontend: 'Open trip page',
       createdAt: 'Created',

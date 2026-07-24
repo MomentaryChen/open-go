@@ -13,6 +13,7 @@ const STATUS_CLASS: Record<string, string> = {
   searching: 'bg-blue-500/15 text-blue-700 dark:text-blue-300',
   crawling: 'bg-blue-500/15 text-blue-700 dark:text-blue-300',
   composing: 'bg-blue-500/15 text-blue-700 dark:text-blue-300',
+  cancelled: 'bg-amber-500/15 text-amber-800 dark:text-amber-300',
   done: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
   failed: 'bg-destructive/15 text-destructive',
 }

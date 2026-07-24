@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as cheerio from 'cheerio';
 import { createHash } from 'crypto';
 import { BrowserFetcherService } from './browser-fetcher.service';
+import { TripCancelledError } from './trip-cancelled.error';
 import { tripConfig } from './trip.config';
 
 export type CrawlResult = {
@@ -27,7 +28,7 @@ export class CrawlerService {
   async crawlAll(
     urls: string[],
     onResult: (result: CrawlResult) => Promise<void> | void,
-    opts?: { concurrency?: number },
+    opts?: { concurrency?: number; signal?: AbortSignal },
   ) {
     const queue = [...urls];
     const workerCount = Math.max(
@@ -37,14 +38,25 @@ export class CrawlerService {
 
     const worker = async () => {
       for (;;) {
+        if (opts?.signal?.aborted) {
+          queue.length = 0;
+          return;
+        }
         const url = queue.shift();
         if (!url) return;
         const result = await this.crawl(url);
+        if (opts?.signal?.aborted) {
+          queue.length = 0;
+          return;
+        }
         await onResult(result);
       }
     };
 
     await Promise.all(Array.from({ length: workerCount }, () => worker()));
+    if (opts?.signal?.aborted) {
+      throw new TripCancelledError();
+    }
   }
 
   async crawl(url: string): Promise<CrawlResult> {

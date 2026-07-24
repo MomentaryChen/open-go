@@ -103,6 +103,12 @@ export class AdminController {
     return this.jobs.retry(id);
   }
 
+  /** Stops a queued or running job; keeps its history for inspection / retry. */
+  @Post('jobs/:id/cancel')
+  cancelJob(@Param('id') id: string) {
+    return this.jobs.cancel(id);
+  }
+
   @Delete('jobs/:id')
   deleteJob(@Param('id') id: string) {
     return this.jobs.remove(id);

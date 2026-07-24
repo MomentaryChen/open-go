@@ -10,6 +10,7 @@ import {
   RefreshCw,
   RotateCw,
   Search,
+  Square,
   Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -44,6 +45,7 @@ import {
 import {
   batchDeleteJobs,
   batchRetryJobs,
+  cancelJob,
   deleteJob,
   failStuckJobs,
   getJobStats,
@@ -62,7 +64,16 @@ import { fmt } from '@/lib/i18n'
 import { useLanguage } from '@/lib/i18n/context'
 
 const PAGE_SIZE = 20
-const STATUS_OPTIONS = ['all', 'active', 'done', 'failed', 'pending'] as const
+const STATUS_OPTIONS = ['all', 'active', 'done', 'failed', 'cancelled', 'pending'] as const
+
+/** Statuses that can still be cancelled (queued or in-flight). */
+const ACTIVE_JOB_STATUSES = new Set([
+  'pending',
+  'planning',
+  'searching',
+  'crawling',
+  'composing',
+])
 
 /** Auto-refresh cadence while any job is still running. */
 const LIVE_REFRESH_MS = 5000
@@ -98,6 +109,7 @@ function JobsPageContent() {
   const [page, setPage] = useState(1)
 
   const [deleteTarget, setDeleteTarget] = useState<JobSummary | null>(null)
+  const [cancelTarget, setCancelTarget] = useState<JobSummary | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [batchAction, setBatchAction] = useState<'retry' | 'delete' | null>(null)
   const [batchBusy, setBatchBusy] = useState(false)
@@ -154,6 +166,21 @@ function JobsPageContent() {
       toast.success(fmt(t.admin.jobs.retried, { keyword: job.keyword }), {
         description: fmt(t.admin.jobs.retriedDesc, { jobId: result.jobId }),
       })
+      await refresh({ silent: true })
+    } catch (error) {
+      toast.error((error as Error).message)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const handleCancel = async () => {
+    if (!cancelTarget) return
+    setBusyId(cancelTarget.id)
+    try {
+      await cancelJob(cancelTarget.id)
+      toast.success(fmt(t.admin.jobs.cancelled, { keyword: cancelTarget.keyword }))
+      setCancelTarget(null)
       await refresh({ silent: true })
     } catch (error) {
       toast.error((error as Error).message)
@@ -359,7 +386,7 @@ function JobsPageContent() {
               <TableHead className="hidden w-24 text-right md:table-cell">{t.admin.jobs.col.documents}</TableHead>
               <TableHead className="hidden w-28 text-right lg:table-cell">{t.admin.jobs.col.duration}</TableHead>
               <TableHead className="hidden w-40 lg:table-cell">{t.admin.jobs.col.createdAt}</TableHead>
-              <TableHead className="w-24 text-right">{t.admin.jobs.col.actions}</TableHead>
+              <TableHead className="w-32 text-right">{t.admin.jobs.col.actions}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -407,6 +434,18 @@ function JobsPageContent() {
                     {formatDateTime(job.createdAt)}
                   </TableCell>
                   <TableCell className="text-right">
+                    {ACTIVE_JOB_STATUSES.has(job.status) && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        disabled={busyId === job.id}
+                        onClick={() => setCancelTarget(job)}
+                        aria-label={fmt(t.admin.jobs.cancelAria, { keyword: job.keyword })}
+                        title={t.admin.jobs.cancel}
+                      >
+                        <Square className="h-4 w-4" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"
@@ -459,6 +498,28 @@ function JobsPageContent() {
           </Button>
         </div>
       </div>
+
+      <AlertDialog
+        open={!!cancelTarget}
+        onOpenChange={(open) => !open && setCancelTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {fmt(t.admin.jobs.cancelTitle, { keyword: cancelTarget?.keyword ?? '' })}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t.admin.jobs.cancelDescription}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void handleCancel()}>
+              {t.admin.jobs.cancel}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={!!deleteTarget}

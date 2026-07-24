@@ -28,7 +28,7 @@ const STAGE_ICONS: Partial<Record<TripStatus, LucideIcon>> = {
 }
 
 function stageState(stage: TripStatus, current: TripStatus) {
-  if (current === 'failed') return 'idle'
+  if (current === 'failed' || current === 'cancelled') return 'idle'
   const currentIndex = STAGE_ORDER.indexOf(current)
   const stageIndex = STAGE_ORDER.indexOf(stage)
   if (currentIndex > stageIndex) return 'done'
@@ -65,7 +65,7 @@ function StageTicker({ status }: { status: TripStatus }) {
 
 export function TripProgress({ event }: { event: TripProgressEvent }) {
   const { t } = useLanguage()
-  const failed = event.status === 'failed'
+  const failed = event.status === 'failed' || event.status === 'cancelled'
   const running = !failed && event.status !== 'done'
 
   return (

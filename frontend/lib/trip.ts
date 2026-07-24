@@ -8,6 +8,7 @@ export type TripStatus =
   | 'composing'
   | 'done'
   | 'failed'
+  | 'cancelled'
 
 export type TripProgressEvent = {
   jobId: string
