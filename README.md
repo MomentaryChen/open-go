@@ -131,7 +131,16 @@ without a restart; changes are logged as `Trip LLM: provider=… model=…`.
 `/admin` is a password-protected console, separate from the user-facing pages, backed by a
 DB `Setting` table with full CRUD. Values in the DB take precedence over environment
 variables and apply to the **next job without a restart** (reads go through a 30s cache
-that is invalidated on every write).
+that is invalidated on every write). The settings page also has dedicated cards for
+**Pipeline tuning** (search / crawl / cache / queue concurrency) and **LLM model**
+selection so the common `trip.*` knobs are not buried only in the key/value table.
+
+The **Jobs** page (`/admin/jobs`) lists trip-generation runs with status/keyword filters.
+After an outage leaves a wave of failures, filter to `Failed` (and optionally a keyword)
+then use **Retry matching** / **Delete matching** — each call acts on up to 100 filtered
+rows and requires a status or keyword filter so “all jobs” cannot be wiped by accident.
+Stuck in-flight leftovers from a backend restart can be bulk-marked failed first via the
+stuck banner.
 
 Auth is deliberately lightweight: `ADMIN_PASSWORD` is checked by a login form which sets an
 httpOnly cookie (a salted SHA-256 digest — the plaintext never reaches the browser);
@@ -145,6 +154,11 @@ it: `POST /ops/jobs/:id/cancel` drops the job from the backlog or signals the ru
 pipeline to stop at the next stage/crawl checkpoint, then marks the row `cancelled` so it
 leaves the active list but remains available to retry or inspect.
 
+Job debugging lives at `/admin/jobs/[id]`: traveller preferences (when set), a link that
+opens the public `/trip/[jobId]` page, the job-level failure message, and per-document
+crawl errors (stored on `TripDocument.error` for crawls run after that column was added;
+older failed rows show status only).
+
 Seeded settings:
 
 | Key | Default | Purpose |
@@ -154,6 +168,7 @@ Seeded settings:
 | `trip.cacheTtlDays` | `7` | Days a finished job satisfies the same keyword again (`0` disables). |
 | `trip.resultsPerQuery` | `12` | Max results taken from a single search query. |
 | `trip.maxDocumentsPerHost` | `3` | Max documents from one host, to keep sources diverse. |
+| `trip.maxConcurrentJobs` | `3` | Whole pipelines allowed to run at once. |
 | `trip.llmProvider` | `gemini` | `gemini` or `anthropic`; the router falls back to env on bad values. |
 | `trip.llmModel` | `auto` | `auto` = the provider's default model; or any explicit model name. |
 | `trip.plannerSystemPrompt` | built-in | System prompt for the keyword planner (blank = code default). |

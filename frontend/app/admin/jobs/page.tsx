@@ -43,6 +43,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import {
+  batchDeleteJobs,
+  batchRetryJobs,
   cancelJob,
   deleteJob,
   failStuckJobs,
@@ -104,6 +106,11 @@ function JobsPageContent() {
   const [deleteTarget, setDeleteTarget] = useState<JobSummary | null>(null)
   const [cancelTarget, setCancelTarget] = useState<JobSummary | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [batchAction, setBatchAction] = useState<'retry' | 'delete' | null>(null)
+  const [batchBusy, setBatchBusy] = useState(false)
+
+  const hasFilter = status !== 'all' || Boolean(keyword)
+  const batchCount = Math.min(total, 100)
 
   const refresh = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -197,6 +204,47 @@ function JobsPageContent() {
       await refresh({ silent: true })
     } catch (error) {
       toast.error((error as Error).message)
+    }
+  }
+
+  const currentFilter = () => ({
+    status: status === 'all' ? undefined : status,
+    keyword: keyword || undefined,
+  })
+
+  const handleBatchConfirm = async () => {
+    if (!batchAction || !hasFilter) return
+    setBatchBusy(true)
+    try {
+      if (batchAction === 'retry') {
+        const result = await batchRetryJobs(currentFilter())
+        toast.success(
+          result.truncated
+            ? fmt(t.admin.jobs.batchRetriedTruncated, {
+                n: result.retried,
+                matched: result.matched,
+                limit: result.limit,
+              })
+            : fmt(t.admin.jobs.batchRetried, { n: result.retried }),
+        )
+      } else {
+        const result = await batchDeleteJobs(currentFilter())
+        toast.success(
+          result.truncated
+            ? fmt(t.admin.jobs.batchDeletedTruncated, {
+                n: result.deleted,
+                matched: result.matched,
+                limit: result.limit,
+              })
+            : fmt(t.admin.jobs.batchDeleted, { n: result.deleted }),
+        )
+      }
+      setBatchAction(null)
+      await refresh({ silent: true })
+    } catch (error) {
+      toast.error((error as Error).message)
+    } finally {
+      setBatchBusy(false)
     }
   }
 
@@ -299,6 +347,28 @@ function JobsPageContent() {
             <Search className="h-4 w-4" />
           </Button>
         </div>
+        {hasFilter && total > 0 && (
+          <div className="ml-auto flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={batchBusy}
+              onClick={() => setBatchAction('retry')}
+            >
+              <RotateCw className="h-4 w-4" />
+              {fmt(t.admin.jobs.batchRetry, { n: batchCount })}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={batchBusy}
+              onClick={() => setBatchAction('delete')}
+            >
+              <Trash2 className="h-4 w-4 text-destructive" />
+              {fmt(t.admin.jobs.batchDelete, { n: batchCount })}
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="rounded-lg border bg-background">
@@ -462,6 +532,38 @@ function JobsPageContent() {
           <AlertDialogFooter>
             <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
             <AlertDialogAction onClick={() => void handleDelete()}>{t.common.delete}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!batchAction}
+        onOpenChange={(open) => !open && !batchBusy && setBatchAction(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {batchAction === 'retry'
+                ? fmt(t.admin.jobs.batchRetryTitle, { n: batchCount })
+                : fmt(t.admin.jobs.batchDeleteTitle, { n: batchCount })}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {batchAction === 'retry'
+                ? t.admin.jobs.batchRetryDescription
+                : t.admin.jobs.batchDeleteDescription}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={batchBusy}>{t.common.cancel}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={batchBusy}
+              onClick={(event) => {
+                event.preventDefault()
+                void handleBatchConfirm()
+              }}
+            >
+              {batchAction === 'retry' ? t.admin.jobs.retry : t.common.delete}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

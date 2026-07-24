@@ -371,6 +371,18 @@ export const en: Dictionary = {
       p95Hint: 'P95 {value}',
       stuckBanner:
         '{count} jobs have made no progress for over {minutes} minutes — likely leftovers from a backend restart',
+      batchRetry: 'Retry matching ({n})',
+      batchDelete: 'Delete matching ({n})',
+      batchRetryTitle: 'Retry {n} matching jobs?',
+      batchRetryDescription:
+        'Creates a new run for each matching job (up to 100), bypassing the cache. Original jobs are kept as history.',
+      batchDeleteTitle: 'Delete {n} matching jobs?',
+      batchDeleteDescription:
+        'Permanently deletes matching jobs and their queries, documents, and itineraries (up to 100). This cannot be undone.',
+      batchRetried: 'Retried {n} jobs',
+      batchRetriedTruncated: 'Retried {n} of {matched} matching jobs (cap {limit})',
+      batchDeleted: 'Deleted {n} jobs',
+      batchDeletedTruncated: 'Deleted {n} of {matched} matching jobs (cap {limit})',
       col: {
         keyword: 'Keyword',
         status: 'Status',
@@ -409,10 +421,13 @@ export const en: Dictionary = {
       cancelling: 'Cancelling…',
       cancel: 'Cancel job',
       backToList: 'Back to job list',
+      openFrontend: 'Open trip page',
       createdAt: 'Created',
       updatedAt: 'Last updated',
       duration: 'Duration',
       model: 'Model',
+      preferences: 'Traveller preferences',
+      preferencesEmpty: 'No preferences set (keyword only)',
       tabDocuments: 'Docs ({n})',
       tabQueries: 'Queries ({n})',
       tabItinerary: 'Itinerary',
@@ -421,6 +436,7 @@ export const en: Dictionary = {
       docPending: 'Pending {n}',
       docColTitle: 'Title / URL',
       docColStatus: 'Status',
+      docColError: 'Failure reason',
       docColFetchedAt: 'Fetched at',
       docEmpty: 'No documents yet',
       queryColText: 'Query',
@@ -588,6 +604,39 @@ export const en: Dictionary = {
       colPartner: 'Partner',
       colCategory: 'Category',
       ctr: 'CTR',
+    },
+
+    pipeline: {
+      title: 'Pipeline tuning',
+      description:
+        'Runtime knobs for search, crawl, cache, and queue concurrency; applies to the next job after saving, no restart',
+      footer: 'Writes the same trip.* keys as the table below; missing keys are created on save.',
+      invalid: 'Each value must be an integer at or above its minimum',
+      updated: 'Pipeline settings updated; applies to the next job',
+      fields: {
+        targetDocuments: 'Target documents',
+        crawlConcurrency: 'Crawl concurrency',
+        cacheTtlDays: 'Cache TTL (days)',
+        resultsPerQuery: 'Results per query',
+        maxDocumentsPerHost: 'Max docs per host',
+        maxConcurrentJobs: 'Max concurrent jobs',
+      },
+      help: {
+        targetDocuments: 'Articles to collect and crawl per job (min 1)',
+        crawlConcurrency: 'Parallel page fetches inside one job (min 1)',
+        cacheTtlDays: 'Reuse a finished job for the same keyword; 0 disables',
+        resultsPerQuery: 'Max search hits taken from one query (min 1)',
+        maxDocumentsPerHost: 'Cap per host so sources stay diverse (min 1)',
+        maxConcurrentJobs: 'Whole pipelines allowed to run at once (min 1)',
+      },
+      desc: {
+        targetDocuments: 'Articles to collect and crawl per job',
+        crawlConcurrency: 'Parallel page fetches inside one job',
+        cacheTtlDays: 'Days a finished job satisfies the same keyword again (0 disables)',
+        resultsPerQuery: 'Max results taken from a single search query',
+        maxDocumentsPerHost: 'Max documents from one host, to keep sources diverse',
+        maxConcurrentJobs: 'Whole pipelines allowed to run at once',
+      },
     },
 
     llm: {
