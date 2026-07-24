@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- Added admin cancel for active trip jobs (`POST /ops/jobs/:id/cancel`): drops queued work from the in-process backlog or aborts a running pipeline at the next checkpoint, marks the job `cancelled` (kept for history / retry), and exposes Cancel actions on the jobs list and job detail pages.
+
 ### Fixed
 - Fixed admin keyword analytics (`/admin/keywords`) failing to load: the host stats query joined `TripDocument` and `TripJob` without qualifying `status` / `url`, so PostgreSQL rejected the ambiguous column reference and the page's parallel fetch aborted.
 

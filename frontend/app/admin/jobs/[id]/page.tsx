@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, ExternalLink, RefreshCw, RotateCw } from 'lucide-react'
+import { ArrowLeft, ExternalLink, RefreshCw, RotateCw, Square } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -18,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getJobDetail, retryJob, type JobDetail } from '@/lib/admin'
+import { cancelJob, getJobDetail, retryJob, type JobDetail } from '@/lib/admin'
 import {
   JobStatusBadge,
   formatDateTime,
@@ -44,6 +44,7 @@ export default function AdminJobDetailPage() {
   const [job, setJob] = useState<JobDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [retrying, setRetrying] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
 
   const refresh = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -84,6 +85,20 @@ export default function AdminJobDetailPage() {
     }
   }
 
+  const handleCancel = async () => {
+    if (!job) return
+    setCancelling(true)
+    try {
+      await cancelJob(job.id)
+      toast.success(fmt(t.admin.jobs.cancelled, { keyword: job.keyword }))
+      await refresh({ silent: true })
+    } catch (error) {
+      toast.error((error as Error).message)
+    } finally {
+      setCancelling(false)
+    }
+  }
+
   if (loading) return <p className="text-sm text-muted-foreground">{t.common.loading}</p>
   if (!job) return <p className="text-sm text-muted-foreground">{t.admin.jobDetail.notFound}</p>
 
@@ -113,6 +128,17 @@ export default function AdminJobDetailPage() {
             <RefreshCw className="h-4 w-4" />
             {t.common.refresh}
           </Button>
+          {ACTIVE_STATUSES.has(job.status) && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={cancelling}
+              onClick={() => void handleCancel()}
+            >
+              <Square className="h-4 w-4" />
+              {cancelling ? t.admin.jobDetail.cancelling : t.admin.jobDetail.cancel}
+            </Button>
+          )}
           <Button size="sm" disabled={retrying} onClick={() => void handleRetry()}>
             <RotateCw className="h-4 w-4" />
             {retrying ? t.admin.jobDetail.retrying : t.admin.jobDetail.retry}

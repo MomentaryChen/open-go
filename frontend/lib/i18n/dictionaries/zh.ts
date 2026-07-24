@@ -317,6 +317,7 @@ export const zh = {
       composing: '組合中',
       done: '完成',
       failed: '失敗',
+      cancelled: '已取消',
     },
 
     range: {
@@ -340,6 +341,7 @@ export const zh = {
         done: '完成',
         failed: '失敗',
         pending: '排隊中',
+        cancelled: '已取消',
       },
       markAllFailed: '全部標記為失敗',
       stat: {
@@ -366,6 +368,12 @@ export const zh = {
       empty: '沒有符合條件的任務',
       retry: '重新執行',
       retryAria: '重新執行 {keyword}',
+      cancel: '取消',
+      cancelAria: '取消 {keyword}',
+      cancelTitle: '取消任務「{keyword}」？',
+      cancelDescription:
+        '會在下一個檢查點停止 pipeline。任務會以「已取消」保留在歷史中，之後仍可重新執行或刪除。',
+      cancelled: '已取消「{keyword}」',
       deleteAria: '刪除 {keyword}',
       deleteTitle: '刪除任務「{keyword}」？',
       deleteDescription: '會一併刪除此任務的查詢、文件與行程結果，此操作無法復原。',
@@ -380,6 +388,8 @@ export const zh = {
       failReason: '失敗原因',
       retrying: '執行中…',
       retry: '重新執行',
+      cancelling: '取消中…',
+      cancel: '取消任務',
       backToList: '返回任務列表',
       createdAt: '建立時間',
       updatedAt: '最後更新',

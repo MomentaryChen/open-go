@@ -140,6 +140,11 @@ server routes that forward to the backend with an `x-admin-key` header, so the s
 secret also never leaves the server. The backend guards `/settings` with the same header
 and fails closed when `ADMIN_PASSWORD` is unset.
 
+The jobs console (`/admin/jobs`) can cancel a queued or in-flight trip job without deleting
+it: `POST /ops/jobs/:id/cancel` drops the job from the backlog or signals the running
+pipeline to stop at the next stage/crawl checkpoint, then marks the row `cancelled` so it
+leaves the active list but remains available to retry or inspect.
+
 Seeded settings:
 
 | Key | Default | Purpose |

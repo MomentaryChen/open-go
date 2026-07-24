@@ -238,6 +238,16 @@ export function retryJob(id: string) {
   )
 }
 
+export function cancelJob(id: string) {
+  return request<{
+    ok: boolean
+    status: 'cancelled'
+    queue: 'queued' | 'running' | 'not_found'
+  }>(`/api/admin/ops/jobs/${encodeURIComponent(id)}/cancel`, {
+    method: 'POST',
+  })
+}
+
 export function deleteJob(id: string) {
   return request<{ ok: boolean }>(
     `/api/admin/ops/jobs/${encodeURIComponent(id)}`,
