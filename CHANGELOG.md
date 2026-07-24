@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- Added a Pipeline tuning card on `/admin/settings` (alongside the LLM card) for `trip.targetDocuments`, `trip.crawlConcurrency`, `trip.cacheTtlDays`, `trip.resultsPerQuery`, `trip.maxDocumentsPerHost`, and `trip.maxConcurrentJobs`, so operators can edit these runtime knobs without hunting the KV table.
+
 ### Fixed
 - Fixed admin keyword analytics (`/admin/keywords`) failing to load: the host stats query joined `TripDocument` and `TripJob` without qualifying `status` / `url`, so PostgreSQL rejected the ambiguous column reference and the page's parallel fetch aborted.
 
