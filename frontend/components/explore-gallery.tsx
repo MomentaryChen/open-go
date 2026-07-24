@@ -1,8 +1,9 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { CalendarDays, FileText, MapPin } from 'lucide-react'
+import { CalendarDays, FileText, MapPin, Search, X } from 'lucide-react'
+import { Input } from '@/components/ui/input'
 import { fmt } from '@/lib/i18n'
 import { useLanguage } from '@/lib/i18n/context'
 import { timeAgo } from '@/lib/trip-history'
@@ -25,28 +26,52 @@ const ALL = '__all__'
 
 type Region = { key: string; label: string; count: number }
 
+function matchesQuery(trip: GalleryTrip, query: string): boolean {
+  if (!query) return true
+  const haystack = [trip.keyword, trip.title, trip.destination, trip.summary]
+    .join('\n')
+    .toLowerCase()
+  return haystack.includes(query)
+}
+
 /**
  * Browse every finished itinerary, grouped by region (the trip's destination).
- * A tab row filters the card grid; "全部" shows everything. Regions are ordered
- * by how many trips they hold, so the busiest destinations lead.
+ * A keyword search narrows the card grid first; region tabs then filter within
+ * those matches. "全部" shows every match. Regions are ordered by how many
+ * matching trips they hold, so the busiest destinations lead.
  */
 export function ExploreGallery({ trips }: { trips: GalleryTrip[] }) {
   const { t } = useLanguage()
   const [active, setActive] = useState<string>(ALL)
+  const [query, setQuery] = useState('')
+
+  const normalizedQuery = query.trim().toLowerCase()
+
+  const matched = useMemo(
+    () => trips.filter((trip) => matchesQuery(trip, normalizedQuery)),
+    [trips, normalizedQuery],
+  )
 
   const regions = useMemo<Region[]>(() => {
     const counts = new Map<string, number>()
-    for (const trip of trips) {
+    for (const trip of matched) {
       counts.set(trip.destination, (counts.get(trip.destination) ?? 0) + 1)
     }
     return [...counts.entries()]
       .map(([key, count]) => ({ key, label: key, count }))
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
-  }, [trips])
+  }, [matched])
+
+  // Drop a region tab selection that no longer has matches after the query changes.
+  useEffect(() => {
+    if (active !== ALL && !regions.some((region) => region.key === active)) {
+      setActive(ALL)
+    }
+  }, [active, regions])
 
   const visible = useMemo(
-    () => (active === ALL ? trips : trips.filter((item) => item.destination === active)),
-    [trips, active],
+    () => (active === ALL ? matched : matched.filter((item) => item.destination === active)),
+    [matched, active],
   )
 
   if (trips.length === 0) {
@@ -66,15 +91,40 @@ export function ExploreGallery({ trips }: { trips: GalleryTrip[] }) {
 
   return (
     <div className="mt-8">
+      <div className="relative max-w-md">
+        <Search
+          className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+          aria-hidden
+        />
+        <Input
+          type="text"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={t.explore.searchPlaceholder}
+          aria-label={t.explore.searchAria}
+          className="pr-9 pl-9"
+        />
+        {query ? (
+          <button
+            type="button"
+            onClick={() => setQuery('')}
+            className="absolute top-1/2 right-2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
+            aria-label={t.explore.clearSearch}
+          >
+            <X className="h-3.5 w-3.5" aria-hidden />
+          </button>
+        ) : null}
+      </div>
+
       {/* Region filter tabs */}
       <div
-        className="flex flex-wrap gap-2"
+        className="mt-4 flex flex-wrap gap-2"
         role="tablist"
         aria-label={t.explore.filterByRegion}
       >
         <TabButton
           label={t.explore.all}
-          count={trips.length}
+          count={matched.length}
           active={active === ALL}
           onClick={() => setActive(ALL)}
         />
@@ -91,17 +141,36 @@ export function ExploreGallery({ trips }: { trips: GalleryTrip[] }) {
 
       <p className="mt-4 text-sm text-muted-foreground">
         {active === ALL
-          ? fmt(t.explore.countLine, { trips: trips.length, regions: regions.length })
+          ? fmt(t.explore.countLine, { trips: matched.length, regions: regions.length })
           : fmt(t.explore.countActive, { active, count: visible.length })}
       </p>
 
-      <ul className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {visible.map((trip) => (
-          <li key={trip.jobId}>
-            <TripCard trip={trip} />
-          </li>
-        ))}
-      </ul>
+      {visible.length === 0 ? (
+        <div className="mt-8 rounded-2xl border border-dashed border-border bg-card/50 px-6 py-12 text-center">
+          <Search className="mx-auto h-8 w-8 text-muted-foreground/60" aria-hidden />
+          <p className="mt-4 text-muted-foreground">
+            {fmt(t.explore.noResults, { query: query.trim() })}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setQuery('')
+              setActive(ALL)
+            }}
+            className="mt-4 text-sm font-medium text-primary hover:underline"
+          >
+            {t.explore.clearSearch}
+          </button>
+        </div>
+      ) : (
+        <ul className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {visible.map((trip) => (
+            <li key={trip.jobId}>
+              <TripCard trip={trip} />
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }

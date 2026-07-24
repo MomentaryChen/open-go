@@ -237,9 +237,13 @@ export const en: Dictionary = {
     badge: 'Trip explorer',
     heading: 'Trips everyone has searched',
     subtitle:
-      'Every AI-generated trip, grouped by region. Tap any card to see the full day-by-day plan.',
+      'Every AI-generated trip — search by keyword or filter by region. Tap any card to see the full day-by-day plan.',
     empty: 'No completed trips yet.',
     emptyCta: 'Plan the first trip →',
+    searchPlaceholder: 'Search keyword, title, or place…',
+    searchAria: 'Search trips',
+    clearSearch: 'Clear search',
+    noResults: 'No trips match “{query}”.',
     filterByRegion: 'Filter by region',
     all: 'All',
     countLine: '{trips} trips · {regions} regions',
@@ -274,7 +278,7 @@ export const en: Dictionary = {
       'Type a keyword and AI reads the web’s travelogues to build a day-by-day, ready-to-go trip — every item cited.',
     exploreTitle: 'Explore trips ｜ OpenGo',
     exploreDescription:
-      'Browse every AI-generated trip, grouped by region — tap in for the day-by-day plan.',
+      'Browse every AI-generated trip — search by keyword or filter by region, then tap in for the day-by-day plan.',
     tripNotFoundTitle: 'Trip not found ｜ OpenGo',
     tripTitle: '{title} ｜ {destination} {days}-day trip',
     tripDescription: 'A {destination} {days}-day trip compiled by AI from {sources} travelogues.',
@@ -495,6 +499,12 @@ export const en: Dictionary = {
       chartFailed: 'Failed',
       chartEmpty: 'No data in this range',
       chartTooltip: '{date}\nTotal {total} · Done {done} · Failed {failed}',
+      reasonsTitle: 'Top failure reasons',
+      reasonsIntro:
+        'Grouped by the exact TripJob.error message (search blocked, empty crawl, LLM timeout, …). No separate error taxonomy.',
+      reasonsEmpty: 'No failed jobs with an error message in this range',
+      reasonsTotal: '{n} failed jobs with an error message',
+      reasonsCol: { error: 'Error', count: 'Count', share: 'Share' },
     },
 
     prompts: {

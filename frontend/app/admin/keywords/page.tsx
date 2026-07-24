@@ -25,11 +25,13 @@ import {
 } from '@/components/ui/table'
 import {
   getContentGaps,
+  getFailureReasons,
   getHostStats,
   getJobTrend,
   getKeywordStats,
   setHostOverride,
   type ContentGap,
+  type FailureReasons,
   type HostStat,
   type KeywordStat,
   type TrendPoint,
@@ -56,6 +58,10 @@ export default function AdminKeywordsPage() {
   const [trend, setTrend] = useState<TrendPoint[]>([])
   const [gaps, setGaps] = useState<ContentGap[]>([])
   const [hosts, setHosts] = useState<HostStat[]>([])
+  const [failureReasons, setFailureReasons] = useState<FailureReasons>({
+    totalFailed: 0,
+    reasons: [],
+  })
   const [loading, setLoading] = useState(true)
   const [hostBusy, setHostBusy] = useState<string | null>(null)
   const [manualHost, setManualHost] = useState('')
@@ -64,16 +70,18 @@ export default function AdminKeywordsPage() {
     setLoading(true)
     const range = Number(days)
     try {
-      const [keywordRows, trendRows, gapRows, hostRows] = await Promise.all([
+      const [keywordRows, trendRows, gapRows, hostRows, reasonRows] = await Promise.all([
         getKeywordStats(range, 50),
         getJobTrend(range),
         getContentGaps(range, 5),
         getHostStats(range),
+        getFailureReasons(range, 10),
       ])
       setKeywords(keywordRows)
       setTrend(trendRows)
       setGaps(gapRows)
       setHosts(hostRows)
+      setFailureReasons(reasonRows)
     } catch (error) {
       toast.error((error as Error).message)
     } finally {
@@ -165,6 +173,8 @@ export default function AdminKeywordsPage() {
       </div>
 
       <TrendChart data={trend} loading={loading} />
+
+      <FailureReasonsCard data={failureReasons} loading={loading} />
 
       <Tabs defaultValue="keywords">
         <TabsList>
@@ -426,6 +436,69 @@ export default function AdminKeywordsPage() {
         </TabsContent>
       </Tabs>
     </div>
+  )
+}
+
+/**
+ * Exact-string top-N of TripJob.error for failed jobs in the selected range.
+ */
+function FailureReasonsCard({
+  data,
+  loading,
+}: {
+  data: FailureReasons
+  loading: boolean
+}) {
+  const { t } = useLanguage()
+
+  return (
+    <Card className="gap-3 p-4">
+      <div>
+        <p className="text-sm font-medium">{t.admin.keywords.reasonsTitle}</p>
+        <p className="text-xs text-muted-foreground">{t.admin.keywords.reasonsIntro}</p>
+      </div>
+      {loading ? (
+        <p className="py-6 text-center text-sm text-muted-foreground">{t.common.loading}</p>
+      ) : data.reasons.length === 0 ? (
+        <p className="py-6 text-center text-sm text-muted-foreground">
+          {t.admin.keywords.reasonsEmpty}
+        </p>
+      ) : (
+        <div className="rounded-lg border bg-background">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t.admin.keywords.reasonsCol.error}</TableHead>
+                <TableHead className="w-24 text-right">{t.admin.keywords.reasonsCol.count}</TableHead>
+                <TableHead className="w-24 text-right">{t.admin.keywords.reasonsCol.share}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.reasons.map((row) => (
+                <TableRow key={row.error}>
+                  <TableCell className="max-w-xl">
+                    <Link
+                      href="/admin/jobs?status=failed"
+                      className="block truncate text-sm text-destructive hover:underline"
+                      title={row.error}
+                    >
+                      {row.error}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{row.count}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatPercent(row.share)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          <p className="border-t px-3 py-2 text-xs text-muted-foreground">
+            {fmt(t.admin.keywords.reasonsTotal, { n: data.totalFailed })}
+          </p>
+        </div>
+      )}
+    </Card>
   )
 }
 
