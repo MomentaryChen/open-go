@@ -15,16 +15,24 @@ import {
   Plane,
   ShoppingBag,
   Sun,
+  Ticket,
   TrainFront,
   UtensilsCrossed,
   type LucideIcon,
 } from 'lucide-react'
+import { AffiliateCta } from '@/components/affiliate-cta'
 import { Card } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  lodgingSearchLinks,
+  shouldShowTicketCta,
+  ticketSearchLinks,
+} from '@/lib/affiliate'
 import { cn } from '@/lib/utils'
 import {
   distanceKm,
   formatDistance,
+  mapsSearchUrl,
   type Itinerary,
   type ItineraryItem,
 } from '@/lib/trip'
@@ -91,7 +99,20 @@ const CATEGORY_META: Record<string, { label: string; icon: LucideIcon; className
   },
 }
 
-export function ItineraryView({ itinerary }: { itinerary: Itinerary }) {
+const LODGING_CTA_CLASS =
+  'border-violet-300 text-violet-700 hover:bg-violet-100 dark:border-violet-800 dark:text-violet-300 dark:hover:bg-violet-900/40'
+
+const TICKET_CTA_CLASS =
+  'border-sky-300 text-sky-700 hover:bg-sky-100 dark:border-sky-800 dark:text-sky-300 dark:hover:bg-sky-900/40'
+
+export function ItineraryView({
+  itinerary,
+  jobId = '',
+}: {
+  itinerary: Itinerary
+  /** Trip job id for affiliate funnel events (Phase 0). */
+  jobId?: string
+}) {
   return (
     <div className="space-y-6">
       {/* Boarding-pass style cover */}
@@ -148,6 +169,9 @@ export function ItineraryView({ itinerary }: { itinerary: Itinerary }) {
                   <TimelineItem
                     key={`${day.day}-${index}`}
                     item={item}
+                    day={day.day}
+                    destination={itinerary.destination}
+                    jobId={jobId}
                     isLast={index === day.items.length - 1}
                   />
                 ))}
@@ -170,6 +194,32 @@ export function ItineraryView({ itinerary }: { itinerary: Itinerary }) {
                         </p>
                       ) : null
                     })()}
+                    <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-muted-foreground">
+                        搜尋此區飯店：
+                      </span>
+                      {lodgingSearchLinks(
+                        itinerary.destination,
+                        day.stay.area,
+                        typeof day.stay.latitude === 'number' &&
+                          typeof day.stay.longitude === 'number'
+                          ? {
+                              latitude: day.stay.latitude,
+                              longitude: day.stay.longitude,
+                            }
+                          : null,
+                      ).map((link) => (
+                        <AffiliateCta
+                          key={link.partner}
+                          link={link}
+                          jobId={jobId}
+                          day={day.day}
+                          category="lodging"
+                          contextLabel={day.stay!.area}
+                          className={LODGING_CTA_CLASS}
+                        />
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
@@ -232,8 +282,27 @@ function CoverStat({ icon: Icon, text }: { icon: LucideIcon; text: string }) {
   )
 }
 
-function TimelineItem({ item, isLast }: { item: ItineraryItem; isLast: boolean }) {
+function TimelineItem({
+  item,
+  day,
+  destination,
+  jobId,
+  isLast,
+}: {
+  item: ItineraryItem
+  day: number
+  destination: string
+  jobId: string
+  isLast: boolean
+}) {
   const meta = CATEGORY_META[item.category] ?? CATEGORY_META.other
+  // Transport rows ("從 A 搭車到 B") are not a single place, so a Maps pin would
+  // point nowhere useful — everything else is a real spot worth reviews.
+  const showMap = item.category !== 'transport'
+  const showTickets = shouldShowTicketCta(item)
+  const tickets = showTickets
+    ? ticketSearchLinks(destination, item.name)
+    : null
 
   return (
     <li className="relative pl-12 pb-6 last:pb-0">
@@ -264,9 +333,64 @@ function TimelineItem({ item, isLast }: { item: ItineraryItem; isLast: boolean }
             <Clock className="h-3 w-3" />
             {item.durationMinutes} 分鐘
           </span>
+          {showMap && (
+            <a
+              href={mapsSearchUrl(item.name, item.address, destination)}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+              title={`在 Google 地圖查看「${item.name}」的評價`}
+            >
+              <MapPin className="h-3 w-3" aria-hidden />
+              地圖評價
+            </a>
+          )}
         </div>
         <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{item.description}</p>
         {item.tips && <p className="mt-1 text-sm text-accent">💡 {item.tips}</p>}
+        {tickets && (
+          <div className="mt-2 space-y-1.5">
+            {tickets.primary.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                  <Ticket className="h-3 w-3" aria-hidden />
+                  查門票：
+                </span>
+                {tickets.primary.map((link) => (
+                  <AffiliateCta
+                    key={`primary-${link.partner}`}
+                    link={link}
+                    jobId={jobId}
+                    day={day}
+                    category="ticket"
+                    contextLabel={item.name}
+                    className={TICKET_CTA_CLASS}
+                  />
+                ))}
+              </div>
+            )}
+            {tickets.fallback.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-muted-foreground">
+                  {tickets.primary.length > 0
+                    ? '或目的地熱門票券：'
+                    : '目的地熱門票券：'}
+                </span>
+                {tickets.fallback.map((link) => (
+                  <AffiliateCta
+                    key={`fallback-${link.partner}`}
+                    link={link}
+                    jobId={jobId}
+                    day={day}
+                    category="ticket"
+                    contextLabel={destination}
+                    className={TICKET_CTA_CLASS}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {item.sourceUrls.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-2">
             {item.sourceUrls.map((url) => (

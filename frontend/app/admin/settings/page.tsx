@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { History, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   AlertDialog,
@@ -51,6 +51,8 @@ import {
   type SettingInput,
 } from '@/lib/admin'
 import { LlmSettingsCard } from '@/components/admin/llm-settings-card'
+import { SettingHistoryDialog } from '@/components/admin/setting-history-dialog'
+import { RetentionCard } from '@/components/admin/retention-card'
 
 const KEY_PATTERN = /^[a-zA-Z0-9._-]{1,100}$/
 
@@ -72,6 +74,7 @@ export default function AdminSettingsPage() {
   const [saving, setSaving] = useState(false)
 
   const [deleteTarget, setDeleteTarget] = useState<Setting | null>(null)
+  const [historyKey, setHistoryKey] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -187,6 +190,8 @@ export default function AdminSettingsPage() {
 
       <LlmSettingsCard settings={settings} onSaved={refresh} />
 
+      <RetentionCard />
+
       <div className="rounded-lg border bg-background">
         <Table>
           <TableHeader>
@@ -196,7 +201,7 @@ export default function AdminSettingsPage() {
               <TableHead>型別</TableHead>
               <TableHead className="hidden md:table-cell">說明</TableHead>
               <TableHead className="hidden lg:table-cell">更新時間</TableHead>
-              <TableHead className="w-24 text-right">操作</TableHead>
+              <TableHead className="w-32 text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -236,6 +241,15 @@ export default function AdminSettingsPage() {
                     {new Date(setting.updatedAt).toLocaleString('zh-TW')}
                   </TableCell>
                   <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setHistoryKey(setting.key)}
+                      aria-label={`${setting.key} 變更紀錄`}
+                      title="變更紀錄"
+                    >
+                      <History className="h-4 w-4" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -366,6 +380,12 @@ export default function AdminSettingsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <SettingHistoryDialog
+        settingKey={historyKey}
+        onClose={() => setHistoryKey(null)}
+        onReverted={refresh}
+      />
 
       <AlertDialog
         open={!!deleteTarget}

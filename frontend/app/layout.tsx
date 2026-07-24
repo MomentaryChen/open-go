@@ -1,14 +1,32 @@
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { ThemeProvider } from '@/components/theme-provider'
+import { siteUrl } from '@/lib/server-api'
 import './globals.css'
 
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
+// `variable` rather than `className`: next/font mangles the family name at
+// build time, so the theme tokens in globals.css have to reference the
+// generated CSS variable instead of a literal "Geist".
+const geistSans = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
+const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' })
+
+const DESCRIPTION =
+  '輸入關鍵字，AI 讀遍網路遊記，為你排出逐日可執行的旅程，每個行程都附上資料來源。'
 
 export const metadata: Metadata = {
-  title: '旅遊探索 | Travel Discovery',
-  description: '探索世界各地的旅遊景點、評論與影片',
+  // Open Graph needs absolute URLs; without this the per-trip metadata's
+  // relative `url` silently resolves against localhost in production.
+  metadataBase: new URL(siteUrl()),
+  title: 'OpenGo ｜ AI 行程規劃',
+  description: DESCRIPTION,
+  openGraph: {
+    type: 'website',
+    siteName: 'OpenGo',
+    locale: 'zh_TW',
+    title: 'OpenGo ｜ AI 行程規劃',
+    description: DESCRIPTION,
+  },
   icons: {
     icon: [
       {
@@ -34,9 +52,21 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="zh-TW" className="bg-background">
-      <body className="font-sans antialiased">
-        {children}
+    // next-themes writes the theme class onto <html> before paint, which the
+    // server render cannot know about — suppressHydrationWarning covers that
+    // one intentional mismatch.
+    <html lang="zh-TW" className="bg-background" suppressHydrationWarning>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
+      >
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {children}
+        </ThemeProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

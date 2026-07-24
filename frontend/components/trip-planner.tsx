@@ -4,9 +4,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Check,
   Cloud,
+  Compass,
   History,
   Loader2,
   Plane,
+  PlugZap,
+  RotateCcw,
   Share2,
   Sparkles,
   Wand2,
@@ -15,16 +18,51 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ItineraryView } from '@/components/itinerary-view'
+import { ThemeToggle } from '@/components/theme-toggle'
+import { TripHistoryMenu } from '@/components/trip-history-menu'
 import { TripProgress } from '@/components/trip-progress'
-import { apiBaseUrl, type Itinerary, type TripProgressEvent } from '@/lib/trip'
+import { copyText } from '@/lib/clipboard'
+import {
+  apiBaseUrl,
+  type Itinerary,
+  type TripProgressEvent,
+  type TripStatus,
+} from '@/lib/trip'
 import {
   addTripHistory,
   clearTripHistory,
+  findResumableTrip,
   loadTripHistory,
+  markTripHistoryDone,
   removeTripHistory,
   timeAgo,
   type TripHistoryEntry,
 } from '@/lib/trip-history'
+
+/** Server-rendered permalink for a finished job — shareable, with a preview card. */
+function sharePath(jobId: string) {
+  return `/trip/${jobId}`
+}
+
+type StoredJob = {
+  keyword?: string
+  status?: string
+  progress?: number
+  message?: string | null
+  error?: string | null
+  itinerary?: { data?: Itinerary } | null
+}
+
+/** Read a job's persisted state. Returns null when it is gone or unreachable. */
+async function fetchJob(jobId: string): Promise<StoredJob | null> {
+  try {
+    const response = await fetch(`${apiBaseUrl()}/trips/${jobId}`)
+    if (!response.ok) return null
+    return (await response.json()) as StoredJob
+  } catch {
+    return null
+  }
+}
 
 const EXAMPLES = [
   { emoji: '🎡', label: '大阪三天兩夜親子自由行' },
@@ -44,8 +82,14 @@ export function TripPlanner() {
   const [historyOpen, setHistoryOpen] = useState(false)
   /** jobId whose share link was just copied, for the ✓ feedback. */
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  /** One-off message shown instead of the progress panel (e.g. after cancelling). */
+  const [notice, setNotice] = useState<string | null>(null)
+  /** A previous run that never reported a result and may still be going. */
+  const [resumable, setResumable] = useState<TripHistoryEntry | null>(null)
   const sourceRef = useRef<EventSource | null>(null)
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** Job currently being tracked, so late async callbacks can tell if they are stale. */
+  const activeJobRef = useRef<string | null>(null)
 
   useEffect(
     () => () => {
@@ -60,12 +104,19 @@ export function TripPlanner() {
     setHistory(loadTripHistory())
   }, [])
 
+  const stopStream = useCallback(() => {
+    sourceRef.current?.close()
+    sourceRef.current = null
+  }, [])
+
   /** Fetch a finished job's stored result and show it (no pipeline re-run). */
   const loadStored = useCallback(async (jobId: string, note?: string) => {
-    sourceRef.current?.close()
+    stopStream()
+    activeJobRef.current = null
     setSubmitting(true)
     setItinerary(null)
     setEvent(null)
+    setNotice(null)
     setFromCache(false)
 
     try {
@@ -87,7 +138,7 @@ export function TripPlanner() {
       setItinerary(job.itinerary.data)
       setFromCache(true)
       // Keep the address bar shareable: copying it reopens this exact result.
-      window.history.replaceState(null, '', `/?job=${jobId}`)
+      window.history.replaceState(null, '', sharePath(jobId))
       return true
     } catch (error) {
       setEvent({
@@ -102,76 +153,48 @@ export function TripPlanner() {
     }
   }, [])
 
-  // A shared link (/?job=...) opens that stored result directly.
-  useEffect(() => {
-    const jobId = new URLSearchParams(window.location.search).get('job')
-    if (jobId) void loadStored(jobId, '已載入分享的行程')
-  }, [loadStored])
+  /** Show a finished itinerary and settle all the bookkeeping that goes with it. */
+  const settleDone = useCallback(
+    (jobId: string, data: Itinerary, message: string) => {
+      setItinerary(data)
+      setEvent({ jobId, status: 'done', progress: 100, message })
+      setHistory(markTripHistoryDone(jobId))
+      window.history.replaceState(null, '', sharePath(jobId))
+    },
+    [],
+  )
 
-  const copyShareLink = useCallback(async (jobId: string) => {
-    const url = `${window.location.origin}/?job=${jobId}`
-    try {
-      await navigator.clipboard.writeText(url)
-    } catch {
-      // Clipboard API blocked (e.g. plain-http origin) — legacy fallback.
-      const textarea = document.createElement('textarea')
-      textarea.value = url
-      document.body.appendChild(textarea)
-      textarea.select()
-      document.execCommand('copy')
-      textarea.remove()
-    }
-    setCopiedId(jobId)
-    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
-    copiedTimerRef.current = setTimeout(() => setCopiedId(null), 2000)
-  }, [])
+  /**
+   * The stream died for good. The pipeline runs server-side, so it may well
+   * have finished in the meantime — ask before declaring anything failed.
+   */
+  const recoverFromDrop = useCallback(
+    async (jobId: string) => {
+      const job = await fetchJob(jobId)
+      if (activeJobRef.current !== jobId) return // user started something else
 
-  const start = useCallback(async (value: string, forceRefresh = false) => {
-    const trimmed = value.trim()
-    if (!trimmed) return
-
-    setHistoryOpen(false)
-    sourceRef.current?.close()
-    setSubmitting(true)
-    setItinerary(null)
-    setEvent(null)
-    setFromCache(false)
-
-    try {
-      const response = await fetch(`${apiBaseUrl()}/trips`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keyword: trimmed, forceRefresh }),
-      })
-      if (!response.ok) throw new Error(`建立任務失敗 (${response.status})`)
-
-      const { jobId, cached } = (await response.json()) as {
-        jobId: string
-        cached?: boolean
-      }
-
-      if (cached) {
-        // The job already finished, so its SSE stream will never emit; read the
-        // stored result directly.
-        const jobResponse = await fetch(`${apiBaseUrl()}/trips/${jobId}`)
-        if (!jobResponse.ok) throw new Error(`讀取快取結果失敗 (${jobResponse.status})`)
-        const job = (await jobResponse.json()) as {
-          itinerary?: { data?: Itinerary } | null
-        }
-        setEvent({
-          jobId,
-          status: 'done',
-          progress: 100,
-          message: '已套用先前相同關鍵字的結果（快取）',
-        })
-        if (job.itinerary?.data) setItinerary(job.itinerary.data)
-        setFromCache(true)
-        setHistory(addTripHistory({ jobId, keyword: trimmed }))
-        window.history.replaceState(null, '', `/?job=${jobId}`)
+      if (job?.itinerary?.data) {
+        settleDone(jobId, job.itinerary.data, '連線曾中斷，已取回完成的行程')
         return
       }
+      setEvent({
+        jobId,
+        status: 'failed',
+        progress: 100,
+        error:
+          job === null
+            ? '與伺服器的連線中斷'
+            : '與伺服器的連線中斷，行程可能仍在產生中——稍後可從「先前的查詢」接續。',
+      })
+    },
+    [settleDone],
+  )
 
-      setEvent({ jobId, status: 'pending', progress: 0, message: '已排入佇列' })
+  /** Subscribe to a job's progress stream. Used for both new and resumed runs. */
+  const attachStream = useCallback(
+    (jobId: string) => {
+      stopStream()
+      activeJobRef.current = jobId
 
       const source = new EventSource(`${apiBaseUrl()}/trips/${jobId}/stream`)
       sourceRef.current = source
@@ -181,35 +204,187 @@ export function TripPlanner() {
         setEvent(payload)
         if (payload.itinerary) setItinerary(payload.itinerary)
         if (payload.status === 'done') {
-          setHistory(addTripHistory({ jobId, keyword: trimmed }))
-          window.history.replaceState(null, '', `/?job=${jobId}`)
+          setHistory(markTripHistoryDone(jobId))
+          window.history.replaceState(null, '', sharePath(jobId))
         }
-        if (payload.status === 'done' || payload.status === 'failed') source.close()
+        if (payload.status === 'failed') setHistory(markTripHistoryDone(jobId))
+        if (payload.status === 'done' || payload.status === 'failed') stopStream()
       }
 
       source.onerror = () => {
-        source.close()
-        setEvent((current) =>
-          current && current.status !== 'done'
-            ? { ...current, status: 'failed', error: '與伺服器的連線中斷' }
-            : current,
-        )
+        // EventSource reconnects on its own; only a CLOSED socket is terminal.
+        // Killing it on the first blip is what used to throw away a run that
+        // the backend was still happily working on.
+        if (source.readyState !== EventSource.CLOSED) {
+          setEvent((current) =>
+            current && current.status !== 'done'
+              ? { ...current, message: '連線中斷，正在重新連線…' }
+              : current,
+          )
+          return
+        }
+        stopStream()
+        void recoverFromDrop(jobId)
       }
-    } catch (error) {
+    },
+    [recoverFromDrop, stopStream],
+  )
+
+  /** Stop watching a run. The backend keeps going; the entry stays resumable. */
+  const cancel = useCallback(() => {
+    stopStream()
+    activeJobRef.current = null
+    setEvent(null)
+    setNotice(
+      '已停止追蹤這次規劃。後端仍會把它跑完，稍後可從「先前的查詢」開啟。',
+    )
+  }, [stopStream])
+
+  /** Reattach to a query that was still running when the page was left. */
+  const resume = useCallback(
+    async (entry: TripHistoryEntry) => {
+      setResumable(null)
+      setHistoryOpen(false)
+      setNotice(null)
+      setItinerary(null)
+      setEvent(null)
+      setFromCache(false)
+      setKeyword(entry.keyword)
+
+      const job = await fetchJob(entry.jobId)
+      if (!job) {
+        setHistory(removeTripHistory(entry.jobId))
+        setEvent({
+          jobId: '',
+          status: 'failed',
+          progress: 100,
+          error: '此紀錄已不存在',
+        })
+        return
+      }
+
+      if (job.itinerary?.data) {
+        settleDone(entry.jobId, job.itinerary.data, '已載入先前的查詢結果')
+        return
+      }
+      if (job.status === 'failed') {
+        setHistory(markTripHistoryDone(entry.jobId))
+        setEvent({
+          jobId: entry.jobId,
+          status: 'failed',
+          progress: 100,
+          error: job.error ?? '這次規劃失敗了',
+        })
+        return
+      }
+
       setEvent({
-        jobId: '',
-        status: 'failed',
-        progress: 100,
-        error: (error as Error).message,
+        jobId: entry.jobId,
+        status: (job.status as TripStatus) ?? 'pending',
+        progress: job.progress ?? 0,
+        message: '已重新連上先前的規劃',
       })
-    } finally {
-      setSubmitting(false)
+      attachStream(entry.jobId)
+    },
+    [attachStream, settleDone],
+  )
+
+  // A shared link (/?job=...) opens that stored result directly. Otherwise,
+  // surface the last run that never reported back so it can be picked up.
+  useEffect(() => {
+    const jobId = new URLSearchParams(window.location.search).get('job')
+    if (jobId) {
+      void loadStored(jobId, '已載入分享的行程')
+      return
     }
+    setResumable(findResumableTrip())
+  }, [loadStored])
+
+  const copyShareLink = useCallback(async (jobId: string) => {
+    // /trip/<id> is server-rendered, so chat apps get a real preview card.
+    await copyText(`${window.location.origin}${sharePath(jobId)}`)
+    setCopiedId(jobId)
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
+    copiedTimerRef.current = setTimeout(() => setCopiedId(null), 2000)
   }, [])
 
-  /** Show a previous query's stored result without re-running the pipeline. */
+  const start = useCallback(
+    async (value: string, forceRefresh = false) => {
+      const trimmed = value.trim()
+      if (!trimmed) return
+
+      setHistoryOpen(false)
+      stopStream()
+      activeJobRef.current = null
+      setSubmitting(true)
+      setItinerary(null)
+      setEvent(null)
+      setNotice(null)
+      setResumable(null)
+      setFromCache(false)
+      // Drop the previous trip's permalink so a refresh mid-run does not reopen it.
+      window.history.replaceState(null, '', '/')
+
+      try {
+        const response = await fetch(`${apiBaseUrl()}/trips`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ keyword: trimmed, forceRefresh }),
+        })
+        if (!response.ok) throw new Error(`建立任務失敗 (${response.status})`)
+
+        const { jobId, cached } = (await response.json()) as {
+          jobId: string
+          cached?: boolean
+        }
+
+        if (cached) {
+          // The job already finished, so its SSE stream will never emit; read
+          // the stored result directly.
+          const job = await fetchJob(jobId)
+          if (!job?.itinerary?.data) throw new Error('讀取快取結果失敗')
+          setItinerary(job.itinerary.data)
+          setEvent({
+            jobId,
+            status: 'done',
+            progress: 100,
+            message: '已套用先前相同關鍵字的結果（快取）',
+          })
+          setFromCache(true)
+          setHistory(addTripHistory({ jobId, keyword: trimmed, done: true }))
+          window.history.replaceState(null, '', sharePath(jobId))
+          return
+        }
+
+        // Recorded before the first event arrives: if the tab is closed or
+        // refreshed mid-run, this entry is what makes the job findable again.
+        setHistory(addTripHistory({ jobId, keyword: trimmed, done: false }))
+        setEvent({ jobId, status: 'pending', progress: 0, message: '已排入佇列' })
+        attachStream(jobId)
+      } catch (error) {
+        setEvent({
+          jobId: '',
+          status: 'failed',
+          progress: 100,
+          error: (error as Error).message,
+        })
+      } finally {
+        setSubmitting(false)
+      }
+    },
+    [attachStream, stopStream],
+  )
+
+  /**
+   * Open a previous query. Finished ones just read back their stored result;
+   * one that never reported back reattaches to its still-running stream.
+   */
   const openHistory = useCallback(
     async (entry: TripHistoryEntry) => {
+      if (entry.done === false) {
+        await resume(entry)
+        return
+      }
       setHistoryOpen(false)
       setKeyword(entry.keyword)
       const ok = await loadStored(
@@ -219,10 +394,11 @@ export function TripPlanner() {
       // The backend no longer has this job — drop the dead entry.
       if (!ok) setHistory(removeTripHistory(entry.jobId))
     },
-    [loadStored],
+    [loadStored, resume],
   )
 
   const running = event !== null && event.status !== 'done' && event.status !== 'failed'
+  const showHistoryMenu = historyOpen && history.length > 0
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-background">
@@ -252,6 +428,17 @@ export function TripPlanner() {
       </div>
 
       <div className="container relative mx-auto max-w-4xl px-4 py-12">
+        <div className="flex items-center justify-between">
+          <a
+            href="/explore"
+            className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-card/70 px-3.5 py-1.5 text-sm font-medium text-primary shadow-sm backdrop-blur transition-colors hover:border-primary/40"
+          >
+            <Compass className="h-3.5 w-3.5" />
+            探索行程
+          </a>
+          <ThemeToggle />
+        </div>
+
         <div className="mt-8 text-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-card/70 px-4 py-2 text-primary shadow-sm backdrop-blur animate-in fade-in slide-in-from-bottom-2 duration-500">
             <Sparkles className="h-4 w-4" />
@@ -283,12 +470,29 @@ export function TripPlanner() {
               setHistoryOpen(false)
             }
           }}
+          // Escape dismisses the dropdown without choosing anything — the one
+          // keyboard exit the focus-within pattern does not give you for free.
+          onKeyDown={(keyEvent) => {
+            if (keyEvent.key === 'Escape' && historyOpen) {
+              keyEvent.preventDefault()
+              setHistoryOpen(false)
+            }
+          }}
         >
           <div className="flex gap-2 rounded-2xl border border-border bg-card/80 p-2 shadow-lg shadow-primary/5 backdrop-blur transition-shadow focus-within:shadow-xl focus-within:shadow-primary/10">
             <Input
               value={keyword}
-              onChange={(inputEvent) => setKeyword(inputEvent.target.value)}
+              onChange={(inputEvent) => {
+                setKeyword(inputEvent.target.value)
+                setHistoryOpen(true)
+              }}
+              // Escape closes the dropdown without moving focus, so onFocus
+              // will not fire again — clicking or typing has to reopen it.
+              onClick={() => setHistoryOpen(true)}
               placeholder="例如：大阪三天兩夜親子自由行"
+              aria-label="旅遊關鍵字"
+              aria-expanded={showHistoryMenu}
+              aria-controls={showHistoryMenu ? 'trip-history-menu' : undefined}
               className="h-12 border-none bg-transparent text-lg shadow-none focus-visible:ring-0"
               disabled={running || submitting}
             />
@@ -308,60 +512,16 @@ export function TripPlanner() {
           </div>
 
           {/* History dropdown: appears under the search box while it has focus. */}
-          {historyOpen && history.length > 0 && (
-            <div className="absolute inset-x-0 top-full z-20 mt-2 rounded-2xl border border-border bg-card/95 p-3 shadow-xl shadow-primary/5 backdrop-blur animate-in fade-in slide-in-from-top-1 duration-200">
-              <div className="flex items-center justify-between px-1">
-                <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                  <History className="h-3.5 w-3.5 text-primary" />
-                  先前的查詢
-                </div>
-                <button
-                  type="button"
-                  className="text-xs text-muted-foreground hover:text-destructive"
-                  onClick={() => setHistory(clearTripHistory())}
-                >
-                  清除全部
-                </button>
-              </div>
-              <ul className="mt-2 space-y-0.5">
-                {history.map((entry) => (
-                  <li key={entry.jobId} className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      disabled={running || submitting}
-                      onClick={() => void openHistory(entry)}
-                      className="flex min-w-0 flex-1 items-baseline justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary/60 disabled:opacity-50"
-                    >
-                      <span className="truncate text-foreground">{entry.keyword}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {timeAgo(entry.createdAt)}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`分享 ${entry.keyword}`}
-                      title="複製分享連結"
-                      className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:text-primary"
-                      onClick={() => void copyShareLink(entry.jobId)}
-                    >
-                      {copiedId === entry.jobId ? (
-                        <Check className="h-3.5 w-3.5 text-primary" />
-                      ) : (
-                        <Share2 className="h-3.5 w-3.5" />
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`移除 ${entry.keyword}`}
-                      className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:text-destructive"
-                      onClick={() => setHistory(removeTripHistory(entry.jobId))}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
+          {showHistoryMenu && (
+            <TripHistoryMenu
+              entries={history}
+              busy={running || submitting}
+              copiedId={copiedId}
+              onOpen={(entry) => void openHistory(entry)}
+              onShare={(jobId) => void copyShareLink(jobId)}
+              onRemove={(jobId) => setHistory(removeTripHistory(jobId))}
+              onClearAll={() => setHistory(clearTripHistory())}
+            />
           )}
         </form>
 
@@ -383,9 +543,71 @@ export function TripPlanner() {
           ))}
         </div>
 
+        {/* A run from a previous visit that never reported a result. Offered
+            rather than resumed automatically, so reloading never surprises. */}
+        {resumable && !event && (
+          <div className="mt-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm animate-in fade-in slide-in-from-bottom-2 duration-500">
+            <span className="flex items-center gap-2 text-foreground">
+              <PlugZap className="h-4 w-4 shrink-0 text-primary" />
+              上次的規劃「{resumable.keyword}」可能還在進行中
+            </span>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                disabled={submitting}
+                onClick={() => void resume(resumable)}
+              >
+                接續查看
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setHistory(removeTripHistory(resumable.jobId))
+                  setResumable(null)
+                }}
+              >
+                忽略
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {notice && (
+          <div className="mt-10 rounded-xl border border-border bg-secondary/50 px-4 py-3 text-sm text-muted-foreground animate-in fade-in slide-in-from-bottom-2 duration-500">
+            {notice}
+          </div>
+        )}
+
         {event && (
           <div className="mt-10">
             <TripProgress event={event} />
+          </div>
+        )}
+
+        {running && event?.jobId && (
+          <div className="mt-3 flex justify-end">
+            <Button type="button" variant="ghost" size="sm" onClick={cancel}>
+              <X className="mr-1.5 h-4 w-4" />
+              停止追蹤
+            </Button>
+          </div>
+        )}
+
+        {event?.status === 'failed' && keyword.trim() && (
+          <div className="mt-3 flex justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={submitting}
+              onClick={() => void start(keyword, true)}
+            >
+              <RotateCcw className="mr-1.5 h-4 w-4" />
+              重試
+            </Button>
           </div>
         )}
 
@@ -428,7 +650,7 @@ export function TripPlanner() {
                 </Button>
               </div>
             )}
-            <ItineraryView itinerary={itinerary} />
+            <ItineraryView itinerary={itinerary} jobId={event?.jobId} />
           </div>
         )}
       </div>

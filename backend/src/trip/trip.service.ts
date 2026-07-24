@@ -1,4 +1,10 @@
-import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  type OnModuleInit,
+} from '@nestjs/common';
 import { IngestionService } from '../ingestion/ingestion.service';
 import type { IngestPoiInput } from '../ingestion/ingestion.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -11,6 +17,7 @@ import type { Itinerary } from './itinerary-composer.service';
 import { KeywordPlannerService, TripPlan } from './keyword-planner.service';
 import { SearchService } from './search/search.service';
 import { TripEventsService } from './trip-events.service';
+import { TripQueueService } from './trip-queue.service';
 import { tripConfig } from './trip.config';
 import { SearchHit, TripProgressEvent, TripStatus } from './trip.types';
 
@@ -32,6 +39,13 @@ const BLOCKED_HOSTS = [
   'reddit.com',
 ];
 
+/** Queued but never started — safe to run from the beginning after a restart. */
+const RESUMABLE_STATUSES = ['pending'];
+/** Caught mid-pipeline by a restart; cannot be continued. */
+const IN_FLIGHT_STATUSES = ['planning', 'searching', 'crawling', 'composing'];
+/** A pending job older than this is abandoned rather than resumed on boot. */
+const RESUME_WINDOW_MS = 60 * 60 * 1000;
+
 /** Pipeline knobs resolved once per job: DB settings first, env/static fallback. */
 type TripRuntimeConfig = {
   targetDocuments: number;
@@ -42,12 +56,13 @@ type TripRuntimeConfig = {
 };
 
 @Injectable()
-export class TripService {
+export class TripService implements OnModuleInit {
   private readonly logger = new Logger(TripService.name);
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: TripEventsService,
+    private readonly queue: TripQueueService,
     private readonly planner: KeywordPlannerService,
     private readonly search: SearchService,
     private readonly crawler: CrawlerService,
@@ -108,11 +123,63 @@ export class TripService {
       progress: 0,
       message: '已排入佇列',
     });
-    void this.run(job.id, keyword).catch((error) => {
-      this.logger.error(`Trip job ${job.id} crashed`, error as Error);
-    });
+    // Admission is the queue's call, not ours: it may start immediately or
+    // hold the job until a slot frees.
+    this.queue.enqueue(job.id, () => this.run(job.id, keyword));
 
     return { job, cached: false };
+  }
+
+  /**
+   * Job state lives in this process, so a restart strands anything that was
+   * in flight. Jobs that never started are re-queued; jobs caught mid-pipeline
+   * cannot be resumed (their partial results are meaningless without the
+   * in-memory context) and are failed explicitly rather than left to look
+   * like they are still running forever.
+   */
+  async onModuleInit() {
+    try {
+      const orphaned = await this.prisma.tripJob.findMany({
+        where: { status: { in: [...RESUMABLE_STATUSES, ...IN_FLIGHT_STATUSES] } },
+        orderBy: { createdAt: 'asc' },
+      });
+      if (orphaned.length === 0) return;
+
+      // Only jobs queued moments before the restart are worth resuming. After
+      // a long outage nobody is still waiting on them, and running the backlog
+      // would spend real LLM budget on results no one reads.
+      const resumeCutoff = new Date(Date.now() - RESUME_WINDOW_MS);
+      const resumable = orphaned.filter(
+        (job) =>
+          RESUMABLE_STATUSES.includes(job.status) &&
+          job.createdAt >= resumeCutoff,
+      );
+      const abandoned = orphaned.filter(
+        (job) => !resumable.some((candidate) => candidate.id === job.id),
+      );
+
+      if (abandoned.length > 0) {
+        await this.prisma.tripJob.updateMany({
+          where: { id: { in: abandoned.map((job) => job.id) } },
+          data: {
+            status: 'failed',
+            error: '服務重新啟動，此任務已中斷，請重新執行',
+            message: '任務已中斷',
+          },
+        });
+      }
+
+      for (const job of resumable) {
+        this.queue.enqueue(job.id, () => this.run(job.id, job.keyword));
+      }
+
+      this.logger.log(
+        `Startup recovery: re-queued ${resumable.length} pending job(s), failed ${abandoned.length} interrupted/stale job(s)`,
+      );
+    } catch (error) {
+      // Never block boot on recovery.
+      this.logger.error('Startup job recovery failed', error as Error);
+    }
   }
 
   /**
@@ -183,6 +250,53 @@ export class TripService {
 
     if (!job) throw new NotFoundException(`Trip job ${jobId} not found`);
     return job;
+  }
+
+  /**
+   * Public gallery of every finished itinerary, newest first, trimmed to the
+   * fields a browse card needs. The region is the itinerary's `destination`
+   * (the same value POIs are ingested under), so the frontend can group by it
+   * without a separate taxonomy. The full itinerary JSON is read to pull those
+   * few fields and then discarded — fine at this app's scale, and it keeps the
+   * response small for the client.
+   */
+  async listGallery(limit = 200) {
+    const jobs = await this.prisma.tripJob.findMany({
+      where: { status: 'done', itinerary: { isNot: null } },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        keyword: true,
+        createdAt: true,
+        itinerary: { select: { summary: true, data: true } },
+        _count: { select: { documents: true } },
+      },
+    });
+
+    return jobs.flatMap((job) => {
+      const data = job.itinerary?.data as unknown as Partial<Itinerary> | null;
+      if (!data || typeof data !== 'object') return [];
+      const days = Array.isArray(data.days) ? data.days.length : 0;
+      const destination =
+        typeof data.destination === 'string' && data.destination.trim()
+          ? data.destination.trim()
+          : '其他';
+      return [
+        {
+          jobId: job.id,
+          keyword: job.keyword,
+          createdAt: job.createdAt,
+          destination,
+          title: typeof data.title === 'string' ? data.title : job.keyword,
+          durationDays:
+            typeof data.durationDays === 'number' ? data.durationDays : days,
+          dayCount: days,
+          summary: job.itinerary?.summary ?? '',
+          sourceCount: job._count.documents,
+        },
+      ];
+    });
   }
 
   async listDocuments(jobId: string) {

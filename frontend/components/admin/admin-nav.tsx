@@ -2,12 +2,23 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Home, LogOut, MessageSquareText, Settings } from 'lucide-react'
+import {
+  Home,
+  ListChecks,
+  LogOut,
+  MessageSquareText,
+  Settings,
+  ShoppingBag,
+  TrendingUp,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { adminLogout } from '@/lib/admin'
 import { cn } from '@/lib/utils'
 
 const NAV_ITEMS = [
+  { href: '/admin/jobs', label: '任務監控', icon: ListChecks },
+  { href: '/admin/keywords', label: '關鍵字分析', icon: TrendingUp },
+  { href: '/admin/affiliate', label: 'Affiliate 漏斗', icon: ShoppingBag },
   { href: '/admin/prompts', label: 'Prompt 管理', icon: MessageSquareText },
   { href: '/admin/settings', label: '系統設定', icon: Settings },
 ]

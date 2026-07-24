@@ -31,3 +31,9 @@ backend/node_modules/
 backend/dist/
 frontend/node_modules/
 frontend/dist/
+
+# Agent probe / marker junk (0-byte files from shell-command mangling).
+# These are never real source; ignore so they can't be staged or committed.
+ZZ*
+ZZMARKER
+ZZPROBE*

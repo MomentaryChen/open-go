@@ -11,6 +11,7 @@ import { GoogleSearchProvider } from './search/google-search.provider';
 import { SearchService } from './search/search.service';
 import { TripController } from './trip.controller';
 import { TripEventsService } from './trip-events.service';
+import { TripQueueService } from './trip-queue.service';
 import { TripService } from './trip.service';
 
 @Module({
@@ -24,7 +25,9 @@ import { TripService } from './trip.service';
     KeywordPlannerService,
     SearchService,
     TripEventsService,
+    TripQueueService,
     TripService,
   ],
+  exports: [TripService, TripQueueService],
 })
 export class TripModule {}

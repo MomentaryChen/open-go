@@ -72,6 +72,20 @@ export function TripProgress({ event }: { event: TripProgressEvent }) {
 
   return (
     <div className="rounded-2xl border border-border bg-card p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/*
+        The pipeline runs for minutes with no visual cue a screen reader can
+        follow, so the essentials are mirrored into one polite live region.
+        Deliberately not wrapping the whole panel: the rotating ticker and the
+        five stage chips re-render constantly and would announce non-stop.
+      */}
+      <p className="sr-only" role="status" aria-live="polite">
+        {failed
+          ? `行程產生失敗：${event.error ?? '未知錯誤'}`
+          : event.status === 'done'
+            ? '行程已完成'
+            : `${event.message ?? '處理中'}，進度 ${event.progress}%`}
+      </p>
+
       <div className="flex items-center justify-between mb-3">
         <p className={cn('text-sm font-medium', failed ? 'text-destructive' : 'text-foreground')}>
           {failed ? (event.error ?? '行程產生失敗') : (event.message ?? '處理中…')}
@@ -129,23 +143,15 @@ export function TripProgress({ event }: { event: TripProgressEvent }) {
         })}
       </ol>
 
-      {running && <StageTicker status={event.status} />}
+      {/* Flavour text on a 2.8s rotation — noise for anyone listening. */}
+      {running && (
+        <div aria-hidden>
+          <StageTicker status={event.status} />
+        </div>
+      )}
 
       {typeof event.crawled === 'number' && typeof event.total === 'number' && (
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-1.5">
-          {Array.from({ length: event.total }, (_, i) => (
-            <span
-              key={i}
-              className={cn(
-                'h-1.5 w-1.5 rounded-full transition-colors duration-300',
-                i < event.crawled ? 'bg-primary' : 'bg-border',
-              )}
-            />
-          ))}
-          <span className="ml-2 text-xs text-muted-foreground tabular-nums">
-            {event.crawled} / {event.total} 篇
-          </span>
-        </div>
+        <CrawlDots crawled={event.crawled} total={event.total} />
       )}
 
       {event.status === 'done' && (
@@ -153,6 +159,43 @@ export function TripProgress({ event }: { event: TripProgressEvent }) {
           🎉 行程完成，往下看你的專屬旅程！
         </p>
       )}
+    </div>
+  )
+}
+
+/**
+ * The dot row is decorative: `total` comes straight off the wire, so it is
+ * capped before being turned into DOM nodes rather than trusting the server
+ * not to send something absurd. The "n / m 篇" text carries the real meaning.
+ */
+const MAX_DOTS = 40
+
+/**
+ * One dot per document being crawled, filled as each one lands. Taking the
+ * counts as props rather than reading them off `event` inline keeps the
+ * "is a number" narrowing alive inside the map callback.
+ */
+function CrawlDots({ crawled, total }: { crawled: number; total: number }) {
+  const shown = Math.min(Math.max(total, 0), MAX_DOTS)
+  // Keep the fill proportional when the real total exceeds what is drawn.
+  const filled = total > 0 ? Math.round((crawled / total) * shown) : 0
+
+  return (
+    <div className="mt-4 flex flex-wrap items-center justify-center gap-1.5">
+      <span aria-hidden className="flex flex-wrap items-center gap-1.5">
+        {Array.from({ length: shown }, (_, i) => (
+          <span
+            key={i}
+            className={cn(
+              'h-1.5 w-1.5 rounded-full transition-colors duration-300',
+              i < filled ? 'bg-primary' : 'bg-border',
+            )}
+          />
+        ))}
+      </span>
+      <span className="ml-2 text-xs text-muted-foreground tabular-nums">
+        {crawled} / {total} 篇
+      </span>
     </div>
   )
 }

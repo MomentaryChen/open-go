@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -69,9 +70,33 @@ export class SettingsController {
     };
   }
 
+  /**
+   * Recent changes across every key, for the settings page's audit panel.
+   * Declared before :key so "history" is not treated as a setting key.
+   */
+  @Get('history')
+  recentHistory(@Query('limit') limit?: string) {
+    return this.settings.recentHistory(this.parseLimit(limit, 50));
+  }
+
   @Get(':key')
   get(@Param('key') key: string) {
     return this.settings.get(key);
+  }
+
+  /** Version history for one key, newest first. */
+  @Get(':key/history')
+  history(@Param('key') key: string, @Query('limit') limit?: string) {
+    return this.settings.history(key, this.parseLimit(limit, 50));
+  }
+
+  /** Restore the value recorded by a history entry. */
+  @Post(':key/revert/:historyId')
+  revert(
+    @Param('key') key: string,
+    @Param('historyId') historyId: string,
+  ) {
+    return this.settings.revert(key, historyId);
   }
 
   @Post()
@@ -128,6 +153,11 @@ export class SettingsController {
   @Delete(':key')
   remove(@Param('key') key: string) {
     return this.settings.remove(key);
+  }
+
+  private parseLimit(raw: string | undefined, fallback: number): number {
+    const value = Number(raw);
+    return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
   }
 
   private parseValueType(raw: string): SettingValueType {

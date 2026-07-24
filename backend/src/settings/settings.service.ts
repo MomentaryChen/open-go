@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Setting } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -34,6 +39,7 @@ export class SettingsService {
   }) {
     const setting = await this.prisma.setting.create({ data });
     this.invalidate();
+    await this.record('create', setting.key, null, setting);
     return setting;
   }
 
@@ -41,17 +47,106 @@ export class SettingsService {
     key: string,
     data: { value?: string; valueType?: SettingValueType; description?: string },
   ) {
-    await this.get(key);
+    const before = await this.get(key);
     const setting = await this.prisma.setting.update({ where: { key }, data });
     this.invalidate();
+    await this.record('update', key, before.value, setting);
     return setting;
   }
 
   async remove(key: string) {
-    await this.get(key);
+    const before = await this.get(key);
     await this.prisma.setting.delete({ where: { key } });
     this.invalidate();
+    await this.record('delete', key, before.value, null, before.valueType);
     return { ok: true };
+  }
+
+  /** Audit trail for one key, newest first. */
+  async history(key: string, limit = 50) {
+    return this.prisma.settingHistory.findMany({
+      where: { key },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(Math.max(limit, 1), 200),
+    });
+  }
+
+  /** Audit trail across all keys, for the settings page's recent-changes view. */
+  async recentHistory(limit = 50) {
+    return this.prisma.settingHistory.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(Math.max(limit, 1), 200),
+    });
+  }
+
+  /**
+   * Restore the value a history entry recorded. For a delete entry there is no
+   * "after" value, so its pre-delete value is restored instead — which also
+   * re-creates the row when it is currently missing. The revert is itself
+   * recorded, so rolling back never erases the trail.
+   */
+  async revert(key: string, historyId: string) {
+    const entry = await this.prisma.settingHistory.findUnique({
+      where: { id: historyId },
+    });
+    if (!entry || entry.key !== key) {
+      throw new NotFoundException(`History entry ${historyId} not found`);
+    }
+
+    const target = entry.newValue ?? entry.oldValue;
+    if (target === null) {
+      throw new BadRequestException('This entry has no value to restore');
+    }
+
+    const current = await this.prisma.setting.findUnique({ where: { key } });
+    const valueType = entry.valueType ?? current?.valueType ?? 'string';
+
+    const setting = current
+      ? await this.prisma.setting.update({
+          where: { key },
+          data: { value: target, valueType },
+        })
+      : await this.prisma.setting.create({
+          data: {
+            key,
+            value: target,
+            valueType,
+            description: entry.description ?? undefined,
+          },
+        });
+
+    this.invalidate();
+    await this.record('revert', key, current?.value ?? null, setting);
+    return setting;
+  }
+
+  /**
+   * Appends an audit row. Never throws into the caller: losing an audit entry
+   * must not fail the settings write the operator actually asked for.
+   */
+  private async record(
+    action: 'create' | 'update' | 'delete' | 'revert',
+    key: string,
+    oldValue: string | null,
+    after: { value: string; valueType: string; description: string | null } | null,
+    fallbackValueType?: string,
+  ) {
+    try {
+      await this.prisma.settingHistory.create({
+        data: {
+          key,
+          action,
+          oldValue,
+          newValue: after?.value ?? null,
+          valueType: after?.valueType ?? fallbackValueType ?? null,
+          description: after?.description ?? null,
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Failed to record ${action} history for ${key}: ${(error as Error).message}`,
+      );
+    }
   }
 
   /**

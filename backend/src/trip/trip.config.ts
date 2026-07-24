@@ -35,6 +35,12 @@ export function parseLlmProvider(raw: string): LlmProvider | null {
 export const tripConfig = {
   targetDocuments: Number(process.env.TRIP_TARGET_DOCUMENTS ?? 30),
   crawlConcurrency: Number(process.env.TRIP_CRAWL_CONCURRENCY ?? 5),
+  /**
+   * Whole pipelines allowed to run at once. Each one costs several LLM calls
+   * plus `crawlConcurrency` parallel fetches, so this is the real ceiling on
+   * load; the rest queue.
+   */
+  maxConcurrentJobs: Number(process.env.TRIP_MAX_CONCURRENT_JOBS || 3),
   /** Days a finished job satisfies the same keyword again; 0 disables the cache. */
   cacheTtlDays: Number(process.env.TRIP_CACHE_TTL_DAYS || 7),
   llmProvider: provider,

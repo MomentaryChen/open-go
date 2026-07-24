@@ -37,6 +37,12 @@ export class TripController {
     return { jobId: job.id, status: job.status, cached };
   }
 
+  // Declared before `:id` so "gallery" is not captured as a job id.
+  @Get('gallery')
+  gallery() {
+    return this.tripService.listGallery();
+  }
+
   @Get(':id')
   get(@Param('id') id: string) {
     return this.tripService.getJob(id);

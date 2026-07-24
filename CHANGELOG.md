@@ -5,7 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- Fixed admin keyword analytics (`/admin/keywords`) failing to load: the host stats query joined `TripDocument` and `TripJob` without qualifying `status` / `url`, so PostgreSQL rejected the ambiguous column reference and the page's parallel fetch aborted.
+
 ### Added
+- Added affiliate conversion CTAs on finished itineraries: overnight `stay` blocks link to Booking / Agoda / Google Hotels (with lat-lng radius when coordinates exist), and attraction stops offer Klook / KKday ticket searches with a destination hot-ticket fallback.
+- Added affiliate funnel tracking (`cta_impression`, `cta_click`, `outbound_redirect`) persisted to an `AffiliateEvent` table via `POST /affiliate/events`, mirrored to Vercel Analytics, and summarized in the admin console at `/admin/affiliate` (`GET /ops/analytics/affiliate`).
 - Added a keyword-driven AI trip planning pipeline: `POST /trips` decomposes a keyword into search queries with Claude, collects 30 web pages, stores their extracted text, and composes a structured day-by-day itinerary that cites its sources.
 - Added a pluggable LLM layer for the trip pipeline: `TRIP_LLM_PROVIDER` selects Gemini (default) or Claude, and `TRIP_MODEL` overrides the model; both steps share one schema-validated interface.
 - Added headless-Chromium (Playwright) Google search for the pipeline, since Google now serves a JavaScript-only shell to plain HTTP clients; article bodies are still fetched over plain HTTP, and `lite.duckduckgo.com` remains the automatic fallback.

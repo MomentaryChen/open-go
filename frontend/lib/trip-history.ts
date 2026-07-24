@@ -1,8 +1,14 @@
 export type TripHistoryEntry = {
   jobId: string
   keyword: string
-  /** ISO timestamp of when the result was produced. */
+  /** ISO timestamp of when the query was started. */
   createdAt: string
+  /**
+   * Whether the pipeline finished. Entries are written as soon as the job is
+   * created so a refresh mid-run can pick it back up; absent on entries stored
+   * before this field existed, which are all finished results.
+   */
+  done?: boolean
 }
 
 const STORAGE_KEY = 'opengo_trip_history'
@@ -29,8 +35,8 @@ export function loadTripHistory(): TripHistoryEntry[] {
 }
 
 /**
- * Record a finished query. Re-running the same keyword replaces the older
- * entry (latest jobId wins) and moves it to the top. Capped at MAX_ENTRIES.
+ * Record a query. Re-running the same keyword replaces the older entry (latest
+ * jobId wins) and moves it to the top. Capped at MAX_ENTRIES.
  */
 export function addTripHistory(
   entry: Omit<TripHistoryEntry, 'createdAt'>,
@@ -44,6 +50,28 @@ export function addTripHistory(
   ].slice(0, MAX_ENTRIES)
   persist(next)
   return next
+}
+
+/** Flip a running entry to finished, keeping its original start time. */
+export function markTripHistoryDone(jobId: string): TripHistoryEntry[] {
+  const next = loadTripHistory().map((entry) =>
+    entry.jobId === jobId ? { ...entry, done: true } : entry,
+  )
+  persist(next)
+  return next
+}
+
+/**
+ * The most recent query that never reported a result, if it is recent enough
+ * to still plausibly be running. Used to reattach after a refresh.
+ */
+export function findResumableTrip(
+  maxAgeMs = 30 * 60 * 1000,
+): TripHistoryEntry | null {
+  const candidate = loadTripHistory().find((entry) => entry.done === false)
+  if (!candidate) return null
+  const age = Date.now() - new Date(candidate.createdAt).getTime()
+  return age >= 0 && age < maxAgeMs ? candidate : null
 }
 
 /** Remove one entry (e.g. its job no longer exists on the backend). */

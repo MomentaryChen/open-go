@@ -1,18 +1,8 @@
 import { NextResponse } from 'next/server'
+import { serverApiBaseUrl } from '@/lib/server-api'
 
-/**
- * Server-side base URL for the NestJS backend. In docker the browser-facing
- * NEXT_PUBLIC_API_BASE_URL (host port) is unreachable from the frontend
- * container, so BACKEND_INTERNAL_URL (service DNS) takes precedence.
- * `||` rather than `??`: docker-compose passes unset variables through as "".
- */
-export function backendBaseUrl() {
-  return (
-    process.env.BACKEND_INTERNAL_URL ||
-    process.env.NEXT_PUBLIC_API_BASE_URL ||
-    'http://localhost:33000'
-  )
-}
+/** Server-side base URL for the NestJS backend. See lib/server-api.ts. */
+export const backendBaseUrl = serverApiBaseUrl
 
 /**
  * Forwards an admin request to the backend with the shared secret attached.

@@ -1,6 +1,7 @@
 'use client'
 
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
+import { useTheme } from 'next-themes'
 import {
   CircleMarker,
   MapContainer,
@@ -45,7 +46,11 @@ type StayPoint = {
 
 function FitToBounds({ bounds }: { bounds: LatLngBoundsExpression }) {
   const map = useMap()
-  useMemo(() => {
+  // An effect, not a memo: this mutates the map instance, and React is free to
+  // drop or replay a memo. Keyed on `bounds` identity so the view is only
+  // reframed when what should be visible actually changes — a re-render from
+  // anything else leaves the user's pan and zoom alone.
+  useEffect(() => {
     map.fitBounds(bounds, { padding: [40, 40], maxZoom: 13 })
   }, [bounds, map])
   return null
@@ -59,6 +64,8 @@ function FitToBounds({ bounds }: { bounds: LatLngBoundsExpression }) {
 export function ItineraryMap({ itinerary }: { itinerary: Itinerary }) {
   // Days a user has toggled off in the legend.
   const [hiddenDays, setHiddenDays] = useState<Set<number>>(new Set())
+  const { resolvedTheme } = useTheme()
+  const darkTiles = resolvedTheme === 'dark'
 
   const stopsByDay = useMemo(() => {
     const byDay = new Map<number, Stop[]>()
@@ -137,7 +144,34 @@ export function ItineraryMap({ itinerary }: { itinerary: Itinerary }) {
     return lines
   }, [stopsByDay, stayByDay])
 
-  if (allStops.length === 0) {
+  // Only the days still switched on in the legend, so toggling one reframes
+  // the map onto what is left instead of snapping back to the whole trip.
+  const visiblePoints = useMemo(() => {
+    const fromStops = [...stopsByDay.entries()]
+      .filter(([day]) => !hiddenDays.has(day))
+      .flatMap(([, stops]) => stops)
+    const fromStays = [...stayByDay.entries()]
+      .filter(([day]) => !hiddenDays.has(day))
+      .map(([, stay]) => stay)
+    return [...fromStops, ...fromStays]
+  }, [stopsByDay, stayByDay, hiddenDays])
+
+  const bounds = useMemo<LatLngBoundsExpression | null>(() => {
+    // Every day hidden: keep framing the whole trip rather than nothing.
+    const points = visiblePoints.length > 0 ? visiblePoints : allStops
+    if (points.length === 0) return null
+
+    const lats = points.map((point) => point.latitude)
+    const lngs = points.map((point) => point.longitude)
+    const latPadding = Math.max((Math.max(...lats) - Math.min(...lats)) * 0.15, 0.01)
+    const lngPadding = Math.max((Math.max(...lngs) - Math.min(...lngs)) * 0.15, 0.01)
+    return [
+      [Math.min(...lats) - latPadding, Math.min(...lngs) - lngPadding],
+      [Math.max(...lats) + latPadding, Math.max(...lngs) + lngPadding],
+    ]
+  }, [visiblePoints, allStops])
+
+  if (allStops.length === 0 || !bounds) {
     return (
       <div className="flex h-72 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-secondary/30 text-center">
         <MapPin className="h-8 w-8 text-muted-foreground/50" />
@@ -148,15 +182,6 @@ export function ItineraryMap({ itinerary }: { itinerary: Itinerary }) {
       </div>
     )
   }
-
-  const lats = allStops.map((stop) => stop.latitude)
-  const lngs = allStops.map((stop) => stop.longitude)
-  const latPadding = Math.max((Math.max(...lats) - Math.min(...lats)) * 0.15, 0.01)
-  const lngPadding = Math.max((Math.max(...lngs) - Math.min(...lngs)) * 0.15, 0.01)
-  const bounds = [
-    [Math.min(...lats) - latPadding, Math.min(...lngs) - lngPadding],
-    [Math.max(...lats) + latPadding, Math.max(...lngs) + lngPadding],
-  ] as LatLngBoundsExpression
 
   const colorOf = (day: number) => DAY_COLORS[(day - 1) % DAY_COLORS.length]
 
@@ -197,9 +222,12 @@ export function ItineraryMap({ itinerary }: { itinerary: Itinerary }) {
 
       <div className="relative h-[28rem] w-full overflow-hidden rounded-xl border border-border shadow-lg">
         <MapContainer bounds={bounds} scrollWheelZoom className="h-full w-full">
+          {/* Keyed so switching theme swaps the basemap instead of leaving a
+              blinding white grid behind the dark UI. */}
           <TileLayer
+            key={darkTiles ? 'dark' : 'light'}
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+            url={`https://{s}.basemaps.cartocdn.com/${darkTiles ? 'dark_all' : 'light_all'}/{z}/{x}/{y}{r}.png`}
           />
           <FitToBounds bounds={bounds} />
 

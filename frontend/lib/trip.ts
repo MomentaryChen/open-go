@@ -23,6 +23,8 @@ export type ItineraryItem = {
   name: string
   category: string
   description: string
+  /** Street address from the source docs; null when none was given. */
+  address?: string | null
   durationMinutes: number
   tips: string
   /** Approximate coordinates from the LLM; absent on results generated before the map feature. */
@@ -59,6 +61,25 @@ export function distanceKm(
 export function formatDistance(km: number): string {
   if (km < 1) return `約 ${Math.round(km * 100) * 10} 公尺`
   return `約 ${km >= 10 ? Math.round(km) : km.toFixed(1)} 公里`
+}
+
+/**
+ * Google Maps search link for a recommended place, so users can open it and
+ * read reviews / photos / hours. Uses the official Maps URL API `query` param.
+ *
+ * The place name plus its address is the most reliable way to land on the right
+ * pin (a name alone is ambiguous across cities); when no address is given, the
+ * destination is appended as a coarse disambiguator.
+ */
+export function mapsSearchUrl(
+  name: string,
+  address?: string | null,
+  destination?: string,
+): string {
+  const parts = [name.trim(), address?.trim() || destination?.trim() || '']
+  const query = parts.filter(Boolean).join(' ')
+  // hl opens the place page (reviews, labels, buttons) in Traditional Chinese.
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}&hl=zh-TW`
 }
 
 export type Itinerary = {

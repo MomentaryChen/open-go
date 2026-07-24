@@ -89,9 +89,30 @@ model TripJob {
   queries   TripQuery[]
   documents TripDocument[]
   itinerary TripItinerary?
+  affiliateEvents AffiliateEvent[]
 
   @@index([status])
   @@index([createdAt])
+}
+
+/// Funnel events from itinerary affiliate CTAs (lodging / tickets).
+/// Append-only; jobId is optional so events survive job deletion (SetNull).
+model AffiliateEvent {
+  id        String   @id @default(cuid())
+  event     String // cta_impression | cta_click | outbound_redirect
+  jobId     String?
+  day       Int?
+  category  String // lodging | ticket
+  partner   String // booking | agoda | google_hotels | klook | kkday
+  label     String?
+  createdAt DateTime @default(now())
+  job       TripJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([event, createdAt])
+  @@index([partner, createdAt])
+  @@index([category, createdAt])
+  @@index([jobId])
 }
 
 model TripQuery {
@@ -130,6 +151,23 @@ model Setting {
   description String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+/// Append-only audit trail for Setting writes. Every create/update/delete/revert
+/// records the value before and after, so a bad prompt edit can be traced and
+/// rolled back without a DB dump.
+model SettingHistory {
+  id          String   @id @default(cuid())
+  key         String
+  action      String // 'create' | 'update' | 'delete' | 'revert'
+  oldValue    String?
+  newValue    String?
+  valueType   String?
+  description String?
+  createdAt   DateTime @default(now())
+
+  @@index([key, createdAt])
+  @@index([createdAt])
 }
 
 model TripItinerary {

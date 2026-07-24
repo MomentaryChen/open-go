@@ -85,6 +85,7 @@ pnpm dev:frontend
 - `GET /trips/:id` (job status, queries and itinerary)
 - `GET /trips/:id/stream` (Server-Sent Events progress feed)
 - `GET /trips/:id/documents` (crawled source documents)
+- `POST /affiliate/events` (public CTA funnel ingest: impression / click / redirect)
 - `GET/POST /settings`, `GET/PATCH/DELETE /settings/:key` (admin-only, `x-admin-key` header)
 
 ## AI trip planning
@@ -101,6 +102,22 @@ pnpm dev:frontend
    itinerary, where every item cites the source URLs it came from.
 
 Progress is pushed over SSE, so the frontend shows each stage live.
+
+### Booking & ticket deep links
+
+Finished itineraries surface outbound CTAs (visually separate from cited sources):
+
+- **Lodging** — each day's overnight stay area links to Booking.com, Agoda, and Google
+  Hotels. When the stay has coordinates, Booking / Agoda searches use a ~3 km radius
+  around that pin; otherwise the query is destination + cleaned area text.
+- **Tickets** — `attraction` stops (and located `other` sights) offer Klook / KKday
+  searches for the attraction name, plus a destination-level hot-ticket fallback.
+- **Tracking** — each CTA records `cta_impression`, `cta_click`, and
+  `outbound_redirect` to the `AffiliateEvent` table (`POST /affiliate/events`) and
+  mirrors the same payload to Vercel Analytics. Fields: `jobId`, `day`, `category`
+  (`lodging` | `ticket`), `partner`. The admin console at `/admin/affiliate` shows
+  CTR by partner/category, a daily trend, and a recent event log
+  (`GET /ops/analytics/affiliate`).
 
 Both LLM steps go through one `StructuredLlm` interface (`src/trip/llm/`): a zod schema
 defines the expected shape, and each adapter enforces it its own way — Gemini via

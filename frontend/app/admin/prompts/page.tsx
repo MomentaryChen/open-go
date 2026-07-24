@@ -1,7 +1,14 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { BrainCircuit, RotateCcw, Save, Wand2, type LucideIcon } from 'lucide-react'
+import {
+  BrainCircuit,
+  History,
+  RotateCcw,
+  Save,
+  Wand2,
+  type LucideIcon,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -15,6 +22,7 @@ import {
   type PromptDefaults,
   type Setting,
 } from '@/lib/admin'
+import { SettingHistoryDialog } from '@/components/admin/setting-history-dialog'
 
 const MAX_LENGTH = 8000
 
@@ -55,6 +63,7 @@ export default function AdminPromptsPage() {
   })
   const [loading, setLoading] = useState(true)
   const [savingKey, setSavingKey] = useState<PromptKey | null>(null)
+  const [historyKey, setHistoryKey] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -199,6 +208,14 @@ export default function AdminPromptsPage() {
                 <Button
                   variant="outline"
                   size="sm"
+                  onClick={() => setHistoryKey(prompt.key)}
+                >
+                  <History className="h-4 w-4" />
+                  歷史版本
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   disabled={isDefault || savingKey !== null}
                   onClick={() => handleReset(prompt)}
                 >
@@ -218,6 +235,12 @@ export default function AdminPromptsPage() {
           </Card>
         )
       })}
+
+      <SettingHistoryDialog
+        settingKey={historyKey}
+        onClose={() => setHistoryKey(null)}
+        onReverted={refresh}
+      />
     </div>
   )
 }

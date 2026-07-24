@@ -140,8 +140,11 @@
 }
 
 @theme inline {
-  --font-sans: 'Geist', 'Geist Fallback';
-  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  /* Geist carries no CJK glyphs, so name the Chinese faces explicitly instead
+     of leaving zh-TW text to whatever the platform picks by default. */
+  --font-sans: var(--font-geist-sans), 'PingFang TC', 'Microsoft JhengHei',
+    'Noto Sans TC', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, 'Cascadia Mono', monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
