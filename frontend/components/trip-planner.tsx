@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  Check,
   Cloud,
   Compass,
   History,
@@ -10,7 +9,6 @@ import {
   Plane,
   PlugZap,
   RotateCcw,
-  Share2,
   Sparkles,
   Wand2,
   X,
@@ -18,13 +16,18 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ItineraryView } from '@/components/itinerary-view'
+import { ShareActions } from '@/components/share-actions'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { TripHistoryMenu } from '@/components/trip-history-menu'
+import { TripPreferencesPanel } from '@/components/trip-preferences-panel'
 import { TripProgress } from '@/components/trip-progress'
 import { copyText } from '@/lib/clipboard'
 import {
   apiBaseUrl,
+  EMPTY_TRIP_PREFERENCES,
+  hasTripPreferences,
   type Itinerary,
+  type TripPreferences,
   type TripProgressEvent,
   type TripStatus,
 } from '@/lib/trip'
@@ -73,6 +76,9 @@ const EXAMPLES = [
 
 export function TripPlanner() {
   const [keyword, setKeyword] = useState('')
+  const [preferences, setPreferences] = useState<TripPreferences>(
+    EMPTY_TRIP_PREFERENCES,
+  )
   const [event, setEvent] = useState<TripProgressEvent | null>(null)
   const [itinerary, setItinerary] = useState<Itinerary | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -329,7 +335,13 @@ export function TripPlanner() {
         const response = await fetch(`${apiBaseUrl()}/trips`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ keyword: trimmed, forceRefresh }),
+          body: JSON.stringify({
+            keyword: trimmed,
+            forceRefresh,
+            // Only sent when the traveller pinned something down; an empty
+            // panel keeps the pipeline's keyword-based inference.
+            ...(hasTripPreferences(preferences) ? { preferences } : {}),
+          }),
         })
         if (!response.ok) throw new Error(`建立任務失敗 (${response.status})`)
 
@@ -372,7 +384,7 @@ export function TripPlanner() {
         setSubmitting(false)
       }
     },
-    [attachStream, stopStream],
+    [attachStream, preferences, stopStream],
   )
 
   /**
@@ -525,6 +537,12 @@ export function TripPlanner() {
           )}
         </form>
 
+        <TripPreferencesPanel
+          value={preferences}
+          onChange={setPreferences}
+          disabled={running || submitting}
+        />
+
         <div className="mt-5 flex flex-wrap justify-center gap-2 animate-in fade-in duration-700 [animation-delay:300ms] [animation-fill-mode:backwards]">
           {EXAMPLES.map((example) => (
             <button
@@ -630,24 +648,11 @@ export function TripPlanner() {
           <div className="mt-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
             {event?.jobId && (
               <div className="mb-3 flex justify-end">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void copyShareLink(event.jobId)}
-                >
-                  {copiedId === event.jobId ? (
-                    <>
-                      <Check className="mr-1.5 h-4 w-4" />
-                      已複製連結
-                    </>
-                  ) : (
-                    <>
-                      <Share2 className="mr-1.5 h-4 w-4" />
-                      分享行程
-                    </>
-                  )}
-                </Button>
+                <ShareActions
+                  jobId={event.jobId}
+                  title={itinerary.title}
+                  path={sharePath(event.jobId)}
+                />
               </div>
             )}
             <ItineraryView itinerary={itinerary} jobId={event?.jobId} />

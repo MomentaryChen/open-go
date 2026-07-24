@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Sparkles } from 'lucide-react'
 import { ItineraryView } from '@/components/itinerary-view'
-import { ShareLinkButton } from '@/components/share-link-button'
+import { ShareActions, ShareCta } from '@/components/share-actions'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { getStoredTrip } from '@/lib/trip-server'
 
@@ -70,7 +70,7 @@ export default async function SharedTripPage({ params }: Params) {
             規劃我的行程
           </Link>
           <div className="flex items-center gap-2">
-            <ShareLinkButton />
+            <ShareActions jobId={jobId} title={trip.itinerary.title} />
             <ThemeToggle />
           </div>
         </div>
@@ -84,6 +84,8 @@ export default async function SharedTripPage({ params }: Params) {
         <div className="mt-4">
           <ItineraryView itinerary={trip.itinerary} jobId={jobId} />
         </div>
+
+        <ShareCta jobId={jobId} title={trip.itinerary.title} />
       </div>
     </main>
   )
