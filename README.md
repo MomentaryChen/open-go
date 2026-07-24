@@ -90,7 +90,11 @@ pnpm dev:frontend
 
 ## AI trip planning
 
-`POST /trips` runs an asynchronous pipeline for a single keyword:
+`POST /trips` runs an asynchronous pipeline for a single keyword.
+
+The keyword is validated before the pipeline starts: URLs, HTML tags, control characters,
+symbol-only strings, and inputs with excessive special characters are rejected with a
+structured error (`{ code, message }`). The same rules run client-side for instant feedback.
 
 1. **planning** — the LLM splits the keyword into 6–10 search queries across attraction /
    food / transport / accommodation / itinerary intents, in mixed languages.

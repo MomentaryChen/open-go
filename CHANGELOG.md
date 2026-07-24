@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- Added keyword input guard for the trip planner: rejects URLs, HTML tags, control characters, emoji/symbol-only input, and gibberish before the pipeline spends LLM or search quota. Validation runs on both client (instant feedback) and server (authoritative), with i18n error messages in zh-TW and English.
+
 ### Fixed
 - Fixed admin keyword analytics (`/admin/keywords`) failing to load: the host stats query joined `TripDocument` and `TripJob` without qualifying `status` / `url`, so PostgreSQL rejected the ambiguous column reference and the page's parallel fetch aborted.
 

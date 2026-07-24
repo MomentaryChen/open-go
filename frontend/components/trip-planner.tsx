@@ -527,13 +527,13 @@ export function TripPlanner() {
             </Button>
           </div>
 
-          {/* History dropdown: appears under the search box while it has focus. */}
           {keywordError && (
             <p className="mt-1.5 px-2 text-sm text-destructive" role="alert">
               {t.tripPlanner.keywordError[keywordError]}
             </p>
           )}
 
+          {/* History dropdown: appears under the search box while it has focus. */}
           {showHistoryMenu && (
             <TripHistoryMenu
               entries={history}
