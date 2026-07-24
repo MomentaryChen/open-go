@@ -536,6 +536,39 @@ export const zh = {
       ctr: 'CTR',
     },
 
+    pipeline: {
+      title: 'Pipeline 調參',
+      description:
+        '搜尋、抓取、快取與佇列並行度的 runtime 參數；儲存後下一個任務即生效，無需重啟',
+      footer: '寫入與下方表格相同的 trip.* 鍵；若不存在會在儲存時建立。',
+      invalid: '每個值都必須是不小於下限的整數',
+      updated: 'Pipeline 設定已更新，下一個任務即會套用',
+      fields: {
+        targetDocuments: '目標文件數',
+        crawlConcurrency: '抓取並行度',
+        cacheTtlDays: '快取 TTL（天）',
+        resultsPerQuery: '每查詢結果數',
+        maxDocumentsPerHost: '每主機文件上限',
+        maxConcurrentJobs: '最大並行任務',
+      },
+      help: {
+        targetDocuments: '每個任務要蒐集並抓取的文章數（最少 1）',
+        crawlConcurrency: '單一任務內並行抓頁數（最少 1）',
+        cacheTtlDays: '相同關鍵字可重用已完成任務的天數；0 停用',
+        resultsPerQuery: '單一搜尋查詢最多取回的結果數（最少 1）',
+        maxDocumentsPerHost: '同一主機上限，維持來源多樣性（最少 1）',
+        maxConcurrentJobs: '同時允許執行的完整 pipeline 數量（最少 1）',
+      },
+      desc: {
+        targetDocuments: '每個任務要蒐集並抓取的文章數',
+        crawlConcurrency: '單一任務內並行抓頁數',
+        cacheTtlDays: '相同關鍵字可重用已完成任務的天數（0 停用）',
+        resultsPerQuery: '單一搜尋查詢最多取回的結果數',
+        maxDocumentsPerHost: '同一主機文件上限，維持來源多樣性',
+        maxConcurrentJobs: '同時允許執行的完整 pipeline 數量',
+      },
+    },
+
     llm: {
       title: 'LLM 模型',
       description: '行程產生使用的 LLM；儲存後下一個任務即生效，無需重啟',
