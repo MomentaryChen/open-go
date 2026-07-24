@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { IngestionModule } from '../ingestion/ingestion.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SettingsModule } from '../settings/settings.module';
 import { CrawlerService } from './crawler.service';
@@ -13,7 +14,7 @@ import { TripEventsService } from './trip-events.service';
 import { TripService } from './trip.service';
 
 @Module({
-  imports: [PrismaModule, LlmModule, SettingsModule],
+  imports: [PrismaModule, LlmModule, SettingsModule, IngestionModule],
   controllers: [TripController],
   providers: [
     CrawlerService,

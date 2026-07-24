@@ -18,6 +18,28 @@ const ItinerarySchema = z.object({
     z.object({
       day: z.number(),
       theme: z.string(),
+      stay: z
+        .object({
+          area: z
+            .string()
+            .describe(
+              'Neighbourhood / district where the traveller sleeps this night, e.g. "小樽運河周邊" — an area, never a specific hotel',
+            ),
+          latitude: z
+            .number()
+            .nullable()
+            .describe("Approximate WGS84 latitude of the area's center"),
+          longitude: z.number().nullable().describe('Approximate WGS84 longitude'),
+          reason: z
+            .string()
+            .describe(
+              "Why this area: proximity to tonight's last stop and tomorrow's first stop, transport links",
+            ),
+        })
+        .nullable()
+        .describe(
+          'Which area this night is spent in; null only on the final day (departure day)',
+        ),
       items: z.array(
         z.object({
           time: z.string().describe('24h start time, e.g. 09:00'),
@@ -31,6 +53,12 @@ const ItinerarySchema = z.object({
             'other',
           ]),
           description: z.string(),
+          address: z
+            .string()
+            .nullable()
+            .describe(
+              'Street address of the place as stated in the documents; null when no document gives one — never invent an address',
+            ),
           durationMinutes: z.number(),
           tips: z.string(),
           latitude: z

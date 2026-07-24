@@ -40,6 +40,8 @@ export function TripPlanner() {
   const [submitting, setSubmitting] = useState(false)
   const [fromCache, setFromCache] = useState(false)
   const [history, setHistory] = useState<TripHistoryEntry[]>([])
+  /** Whether the history dropdown under the search box is showing. */
+  const [historyOpen, setHistoryOpen] = useState(false)
   /** jobId whose share link was just copied, for the ✓ feedback. */
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const sourceRef = useRef<EventSource | null>(null)
@@ -128,6 +130,7 @@ export function TripPlanner() {
     const trimmed = value.trim()
     if (!trimmed) return
 
+    setHistoryOpen(false)
     sourceRef.current?.close()
     setSubmitting(true)
     setItinerary(null)
@@ -207,6 +210,7 @@ export function TripPlanner() {
   /** Show a previous query's stored result without re-running the pipeline. */
   const openHistory = useCallback(
     async (entry: TripHistoryEntry) => {
+      setHistoryOpen(false)
       setKeyword(entry.keyword)
       const ok = await loadStored(
         entry.jobId,
@@ -266,10 +270,18 @@ export function TripPlanner() {
         </div>
 
         <form
-          className="mt-8 animate-in fade-in slide-in-from-bottom-4 duration-700 [animation-delay:200ms] [animation-fill-mode:backwards]"
+          className="relative mt-8 animate-in fade-in slide-in-from-bottom-4 duration-700 [animation-delay:200ms] [animation-fill-mode:backwards]"
           onSubmit={(formEvent) => {
             formEvent.preventDefault()
             void start(keyword)
+          }}
+          // Focus-within tracking: the dropdown stays open while focus is on
+          // the input or any button inside it, and closes when focus leaves.
+          onFocus={() => setHistoryOpen(true)}
+          onBlur={(focusEvent) => {
+            if (!focusEvent.currentTarget.contains(focusEvent.relatedTarget)) {
+              setHistoryOpen(false)
+            }
           }}
         >
           <div className="flex gap-2 rounded-2xl border border-border bg-card/80 p-2 shadow-lg shadow-primary/5 backdrop-blur transition-shadow focus-within:shadow-xl focus-within:shadow-primary/10">
@@ -294,6 +306,63 @@ export function TripPlanner() {
               {running ? '規劃中…' : '出發'}
             </Button>
           </div>
+
+          {/* History dropdown: appears under the search box while it has focus. */}
+          {historyOpen && history.length > 0 && (
+            <div className="absolute inset-x-0 top-full z-20 mt-2 rounded-2xl border border-border bg-card/95 p-3 shadow-xl shadow-primary/5 backdrop-blur animate-in fade-in slide-in-from-top-1 duration-200">
+              <div className="flex items-center justify-between px-1">
+                <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                  <History className="h-3.5 w-3.5 text-primary" />
+                  先前的查詢
+                </div>
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground hover:text-destructive"
+                  onClick={() => setHistory(clearTripHistory())}
+                >
+                  清除全部
+                </button>
+              </div>
+              <ul className="mt-2 space-y-0.5">
+                {history.map((entry) => (
+                  <li key={entry.jobId} className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={running || submitting}
+                      onClick={() => void openHistory(entry)}
+                      className="flex min-w-0 flex-1 items-baseline justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary/60 disabled:opacity-50"
+                    >
+                      <span className="truncate text-foreground">{entry.keyword}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {timeAgo(entry.createdAt)}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`分享 ${entry.keyword}`}
+                      title="複製分享連結"
+                      className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:text-primary"
+                      onClick={() => void copyShareLink(entry.jobId)}
+                    >
+                      {copiedId === entry.jobId ? (
+                        <Check className="h-3.5 w-3.5 text-primary" />
+                      ) : (
+                        <Share2 className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`移除 ${entry.keyword}`}
+                      className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:text-destructive"
+                      onClick={() => setHistory(removeTripHistory(entry.jobId))}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </form>
 
         <div className="mt-5 flex flex-wrap justify-center gap-2 animate-in fade-in duration-700 [animation-delay:300ms] [animation-fill-mode:backwards]">
@@ -313,62 +382,6 @@ export function TripPlanner() {
             </button>
           ))}
         </div>
-
-        {history.length > 0 && (
-          <div className="mx-auto mt-8 max-w-2xl rounded-2xl border border-border bg-card/70 p-4 shadow-sm backdrop-blur animate-in fade-in duration-500">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <History className="h-4 w-4 text-primary" />
-                先前的查詢
-              </div>
-              <button
-                type="button"
-                className="text-xs text-muted-foreground hover:text-destructive"
-                onClick={() => setHistory(clearTripHistory())}
-              >
-                清除全部
-              </button>
-            </div>
-            <ul className="mt-3 space-y-1.5">
-              {history.map((entry) => (
-                <li key={entry.jobId} className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={running || submitting}
-                    onClick={() => void openHistory(entry)}
-                    className="flex min-w-0 flex-1 items-baseline justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-secondary/60 disabled:opacity-50"
-                  >
-                    <span className="truncate text-foreground">{entry.keyword}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {timeAgo(entry.createdAt)}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`分享 ${entry.keyword}`}
-                    title="複製分享連結"
-                    className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:text-primary"
-                    onClick={() => void copyShareLink(entry.jobId)}
-                  >
-                    {copiedId === entry.jobId ? (
-                      <Check className="h-3.5 w-3.5 text-primary" />
-                    ) : (
-                      <Share2 className="h-3.5 w-3.5" />
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`移除 ${entry.keyword}`}
-                    className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:text-destructive"
-                    onClick={() => setHistory(removeTripHistory(entry.jobId))}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
 
         {event && (
           <div className="mt-10">

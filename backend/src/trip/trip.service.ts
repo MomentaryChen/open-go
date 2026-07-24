@@ -1,10 +1,13 @@
 import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { IngestionService } from '../ingestion/ingestion.service';
+import type { IngestPoiInput } from '../ingestion/ingestion.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { CrawlerService } from './crawler.service';
 import { STRUCTURED_LLM } from './llm/llm.types';
 import type { StructuredLlm } from './llm/llm.types';
 import { ItineraryComposerService } from './itinerary-composer.service';
+import type { Itinerary } from './itinerary-composer.service';
 import { KeywordPlannerService, TripPlan } from './keyword-planner.service';
 import { SearchService } from './search/search.service';
 import { TripEventsService } from './trip-events.service';
@@ -49,6 +52,7 @@ export class TripService {
     private readonly search: SearchService,
     private readonly crawler: CrawlerService,
     private readonly composer: ItineraryComposerService,
+    private readonly ingestion: IngestionService,
     private readonly settings: SettingsService,
     @Inject(STRUCTURED_LLM) private readonly llm: StructuredLlm,
   ) {}
@@ -475,6 +479,8 @@ export class TripService {
       },
     });
 
+    await this.ingestItineraryPois(jobId, plan, itinerary);
+
     await this.prisma.tripJob.update({
       where: { id: jobId },
       data: { status: 'done', progress: 100, message: '行程已完成' },
@@ -487,6 +493,68 @@ export class TripService {
       message: '行程已完成',
       itinerary,
     });
+  }
+
+  /**
+   * Record every AI-recommended fixed place into the Poi catalog so the
+   * knowledge base grows with each itinerary: name, category, address and
+   * coordinates are kept, keyed by a deterministic (destination, name) id so
+   * the same place recommended again updates rather than duplicates.
+   * Best-effort — a failure here never fails the trip job.
+   */
+  private async ingestItineraryPois(
+    jobId: string,
+    plan: TripPlan,
+    itinerary: Itinerary,
+  ) {
+    const regionName = itinerary.destination || plan.destination;
+    const countryCode =
+      /^[A-Za-z]{2}$/.test(plan.destinationCountryCode ?? '')
+        ? plan.destinationCountryCode.toUpperCase()
+        : undefined;
+
+    const seen = new Set<string>();
+    const pois: IngestPoiInput[] = [];
+    for (const day of itinerary.days) {
+      for (const item of day.items) {
+        // Only fixed places make sense as POIs: transfers and misc. items
+        // ("搭 JR 前往小樽") have no single location worth cataloguing.
+        if (item.category === 'transport' || item.category === 'other') continue;
+        if (item.latitude == null || item.longitude == null) continue;
+        if (!item.name.trim()) continue;
+
+        const sourceId = `${regionName}:${item.name}`
+          .toLowerCase()
+          .replace(/\s+/g, '');
+        if (seen.has(sourceId)) continue;
+        seen.add(sourceId);
+
+        pois.push({
+          source: 'ai-itinerary',
+          sourceId,
+          regionName,
+          countryCode,
+          name: item.name.trim(),
+          category: item.category,
+          address: item.address ?? undefined,
+          latitude: item.latitude,
+          longitude: item.longitude,
+        });
+      }
+    }
+
+    if (pois.length === 0) return;
+
+    try {
+      const result = await this.ingestion.ingestPois(pois);
+      this.logger.log(
+        `Job ${jobId}: ingested ${pois.length} itinerary POIs into region "${regionName}" (created ${result.created}, updated ${result.updated}, merged ${result.merged}, skipped ${result.skipped})`,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Job ${jobId}: failed to ingest itinerary POIs: ${(error as Error).message}`,
+      );
+    }
   }
 
   private async publish(

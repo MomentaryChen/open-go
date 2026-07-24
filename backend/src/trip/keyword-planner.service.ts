@@ -9,6 +9,11 @@ const PlanSchema = z.object({
   destination: z
     .string()
     .describe('The travel destination inferred from the keyword'),
+  destinationCountryCode: z
+    .string()
+    .describe(
+      "ISO 3166-1 alpha-2 country code of the destination, e.g. JP for 北海道, TW for 台南",
+    ),
   durationDays: z
     .number()
     .describe('Trip length in days; infer a sensible default when unstated'),

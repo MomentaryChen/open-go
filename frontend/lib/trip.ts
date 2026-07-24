@@ -31,6 +31,36 @@ export type ItineraryItem = {
   sourceUrls: string[]
 }
 
+/** Overnight stay area planned for a day; absent on results generated before this feature. */
+export type ItineraryStay = {
+  area: string
+  /** Present only on results from before the area-only change. */
+  name?: string | null
+  latitude?: number | null
+  longitude?: number | null
+  reason?: string
+}
+
+/** Great-circle distance in kilometres between two WGS84 points (haversine). */
+export function distanceKm(
+  a: { latitude: number; longitude: number },
+  b: { latitude: number; longitude: number },
+): number {
+  const toRad = (deg: number) => (deg * Math.PI) / 180
+  const dLat = toRad(b.latitude - a.latitude)
+  const dLng = toRad(b.longitude - a.longitude)
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a.latitude)) * Math.cos(toRad(b.latitude)) * Math.sin(dLng / 2) ** 2
+  return 6371 * 2 * Math.asin(Math.sqrt(h))
+}
+
+/** "約 800 公尺" below 1 km, otherwise "約 12.5 公里". */
+export function formatDistance(km: number): string {
+  if (km < 1) return `約 ${Math.round(km * 100) * 10} 公尺`
+  return `約 ${km >= 10 ? Math.round(km) : km.toFixed(1)} 公里`
+}
+
 export type Itinerary = {
   title: string
   destination: string
@@ -38,7 +68,12 @@ export type Itinerary = {
   summary: string
   bestSeason: string
   budgetEstimate: string
-  days: Array<{ day: number; theme: string; items: ItineraryItem[] }>
+  days: Array<{
+    day: number
+    theme: string
+    stay?: ItineraryStay | null
+    items: ItineraryItem[]
+  }>
   tips: string[]
   references: Array<{ title: string; url: string }>
 }

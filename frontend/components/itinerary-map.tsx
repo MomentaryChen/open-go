@@ -13,7 +13,7 @@ import {
 import type { LatLngBoundsExpression } from 'leaflet'
 import { MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { Itinerary } from '@/lib/trip'
+import { distanceKm, formatDistance, type Itinerary } from '@/lib/trip'
 
 /** One color per day; wraps around for trips longer than the palette. */
 const DAY_COLORS = [
@@ -32,6 +32,13 @@ type Stop = {
   order: number
   time: string
   name: string
+  latitude: number
+  longitude: number
+}
+
+type StayPoint = {
+  day: number
+  area: string
   latitude: number
   longitude: number
 }
@@ -77,10 +84,58 @@ export function ItineraryMap({ itinerary }: { itinerary: Itinerary }) {
     return byDay
   }, [itinerary])
 
+  const stayByDay = useMemo(() => {
+    const byDay = new Map<number, StayPoint>()
+    for (const day of itinerary.days) {
+      const stay = day.stay
+      if (
+        stay &&
+        typeof stay.latitude === 'number' &&
+        typeof stay.longitude === 'number'
+      ) {
+        byDay.set(day.day, {
+          day: day.day,
+          area: stay.area,
+          latitude: stay.latitude,
+          longitude: stay.longitude,
+        })
+      }
+    }
+    return byDay
+  }, [itinerary])
+
   const allStops = useMemo(
-    () => [...stopsByDay.values()].flat(),
-    [stopsByDay],
+    () => [
+      ...[...stopsByDay.values()].flat(),
+      ...[...stayByDay.values()].map((stay) => ({
+        latitude: stay.latitude,
+        longitude: stay.longitude,
+      })),
+    ],
+    [stopsByDay, stayByDay],
   )
+
+  // Overnight transitions: last point of day N (its stay when located,
+  // otherwise its last stop) to the first stop of day N+1.
+  const transitions = useMemo(() => {
+    const dayNumbers = [...stopsByDay.keys()].sort((a, b) => a - b)
+    const lines: Array<{ from: [number, number]; to: [number, number]; days: [number, number] }> = []
+    for (let i = 0; i < dayNumbers.length - 1; i++) {
+      const current = dayNumbers[i]
+      const next = dayNumbers[i + 1]
+      const stay = stayByDay.get(current)
+      const stops = stopsByDay.get(current)
+      const end = stay ?? stops?.[stops.length - 1]
+      const start = stopsByDay.get(next)?.[0]
+      if (!end || !start) continue
+      lines.push({
+        from: [end.latitude, end.longitude],
+        to: [start.latitude, start.longitude],
+        days: [current, next],
+      })
+    }
+    return lines
+  }, [stopsByDay, stayByDay])
 
   if (allStops.length === 0) {
     return (
@@ -148,13 +203,41 @@ export function ItineraryMap({ itinerary }: { itinerary: Itinerary }) {
           />
           <FitToBounds bounds={bounds} />
 
+          {/* Grey overnight connectors: where you sleep → next morning's start */}
+          {transitions
+            .filter(({ days }) => !hiddenDays.has(days[0]) && !hiddenDays.has(days[1]))
+            .map(({ from, to, days }) => (
+              <Polyline
+                key={`t-${days[0]}-${days[1]}`}
+                positions={[from, to]}
+                pathOptions={{ color: '#94a3b8', weight: 2, opacity: 0.6, dashArray: '2 7' }}
+              >
+                <Tooltip sticky>
+                  D{days[0]} 住宿 → D{days[1]} 出發：
+                  {formatDistance(
+                    distanceKm(
+                      { latitude: from[0], longitude: from[1] },
+                      { latitude: to[0], longitude: to[1] },
+                    ),
+                  )}
+                </Tooltip>
+              </Polyline>
+            ))}
+
           {[...stopsByDay.entries()]
             .filter(([day]) => !hiddenDays.has(day))
-            .map(([day, stops]) => (
+            .map(([day, stops]) => {
+              const stay = stayByDay.get(day)
+              // The day's route ends at that night's stay when it is located.
+              const routePoints: [number, number][] = [
+                ...stops.map((stop): [number, number] => [stop.latitude, stop.longitude]),
+                ...(stay ? [[stay.latitude, stay.longitude] as [number, number]] : []),
+              ]
+              return (
               <Fragment key={day}>
-                {stops.length > 1 && (
+                {routePoints.length > 1 && (
                   <Polyline
-                    positions={stops.map((stop) => [stop.latitude, stop.longitude])}
+                    positions={routePoints}
                     pathOptions={{
                       color: colorOf(day),
                       weight: 3,
@@ -162,6 +245,33 @@ export function ItineraryMap({ itinerary }: { itinerary: Itinerary }) {
                       dashArray: '6 8',
                     }}
                   />
+                )}
+                {stay && (
+                  <CircleMarker
+                    center={[stay.latitude, stay.longitude]}
+                    radius={12}
+                    pathOptions={{
+                      color: colorOf(day),
+                      weight: 3,
+                      fillColor: '#ffffff',
+                      fillOpacity: 1,
+                    }}
+                  >
+                    <Tooltip
+                      permanent
+                      direction="center"
+                      offset={[0, 0]}
+                      opacity={1}
+                      className="map-index-tooltip"
+                    >
+                      🏨
+                    </Tooltip>
+                    <Popup>
+                      <span className="text-sm font-medium">D{stay.day} 住宿區域</span>
+                      <br />
+                      {stay.area}
+                    </Popup>
+                  </CircleMarker>
                 )}
                 {stops.map((stop) => (
                   <CircleMarker
@@ -196,7 +306,8 @@ export function ItineraryMap({ itinerary }: { itinerary: Itinerary }) {
                   </CircleMarker>
                 ))}
               </Fragment>
-            ))}
+              )
+            })}
         </MapContainer>
 
         <div className="absolute bottom-3 left-3 z-[1000] rounded-lg border border-border bg-card/90 px-3 py-1.5 text-xs text-muted-foreground shadow backdrop-blur">

@@ -22,7 +22,28 @@ import {
 import { Card } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
-import type { Itinerary, ItineraryItem } from '@/lib/trip'
+import {
+  distanceKm,
+  formatDistance,
+  type Itinerary,
+  type ItineraryItem,
+} from '@/lib/trip'
+
+/** Distance from a day's stay to the next day's first located item, if both are known. */
+function stayToNextDayKm(itinerary: Itinerary, dayIndex: number): number | null {
+  const stay = itinerary.days[dayIndex]?.stay
+  if (typeof stay?.latitude !== 'number' || typeof stay?.longitude !== 'number') {
+    return null
+  }
+  const firstStop = itinerary.days[dayIndex + 1]?.items.find(
+    (item) => typeof item.latitude === 'number' && typeof item.longitude === 'number',
+  )
+  if (!firstStop) return null
+  return distanceKm(
+    { latitude: stay.latitude, longitude: stay.longitude },
+    { latitude: firstStop.latitude!, longitude: firstStop.longitude! },
+  )
+}
 
 // Leaflet touches `window`; keep it out of the server render.
 const ItineraryMap = dynamic(
@@ -131,6 +152,27 @@ export function ItineraryView({ itinerary }: { itinerary: Itinerary }) {
                   />
                 ))}
               </ol>
+              {day.stay && (
+                <div className="mt-4 flex items-start gap-3 rounded-xl border border-violet-200 bg-violet-50/60 px-4 py-3 dark:border-violet-900 dark:bg-violet-950/30">
+                  <BedDouble className="mt-0.5 h-4 w-4 shrink-0 text-violet-600 dark:text-violet-300" />
+                  <div className="text-sm">
+                    <p className="font-medium text-foreground">
+                      今晚住宿區域：{day.stay.area}
+                    </p>
+                    {day.stay.reason && (
+                      <p className="mt-0.5 text-muted-foreground">{day.stay.reason}</p>
+                    )}
+                    {(() => {
+                      const km = stayToNextDayKm(itinerary, dayIndex)
+                      return km !== null ? (
+                        <p className="mt-0.5 text-violet-700 dark:text-violet-300">
+                          距 Day {day.day + 1} 出發點{formatDistance(km)}
+                        </p>
+                      ) : null
+                    })()}
+                  </div>
+                </div>
+              )}
             </Card>
           ))}
         </TabsContent>
