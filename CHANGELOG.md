@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- Enriched admin job detail (`/admin/jobs/[id]`): shows traveller preferences, a one-click link to the public `/trip/[jobId]` page, and per-document crawl failure reasons (persisted on `TripDocument.error` for new crawls).
+
 ### Fixed
 - Fixed admin keyword analytics (`/admin/keywords`) failing to load: the host stats query joined `TripDocument` and `TripJob` without qualifying `status` / `url`, so PostgreSQL rejected the ambiguous column reference and the page's parallel fetch aborted.
 

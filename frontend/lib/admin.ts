@@ -178,12 +178,25 @@ export type JobDocument = {
   title: string | null
   snippet: string | null
   status: string
+  /** Crawl failure reason when status is `failed`; null for older rows. */
+  error: string | null
   fetchedAt: string | null
+}
+
+export type JobPreferences = {
+  durationDays: number | null
+  companions: string | null
+  pace: string | null
+  budget: string | null
+  mustVisit: string[]
+  avoid: string[]
 }
 
 export type JobDetail = {
   id: string
   keyword: string
+  /** Structured traveller preferences; null for keyword-only / legacy jobs. */
+  preferences: JobPreferences | null
   status: string
   progress: number
   message: string | null
