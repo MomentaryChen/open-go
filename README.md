@@ -141,10 +141,16 @@ that is invalidated on every write). The settings page also has dedicated cards 
 **Pipeline tuning** (search / crawl / cache / queue concurrency) and **LLM model**
 selection so the common `trip.*` knobs are not buried only in the key/value table.
 
-Opening `/admin` lands on **System health** (`/admin/health`, `GET /ops/health`): database
+The **Dashboard** at `/admin` composes existing ops APIs into one overview: stuck in-flight
+jobs (`GET /ops/jobs/stats` + optional `POST /ops/jobs/fail-stuck`), high-failure keywords
+(`GET /ops/analytics/keywords`), affiliate CTR (`GET /ops/analytics/affiliate`), and
+storage usage (`GET /ops/retention`). Deep links jump to Jobs, Keywords, Affiliate, and
+Settings for the full tools.
+
+**System health** (`/admin/health`, `GET /ops/health`) is a separate triage page: database
 latency, Playwright search/crawl browser readiness (including a cached Chromium probe),
 Gemini/Anthropic API key presence for the active provider, live queue `running`/`queued`
-counts, and last-24h job success rate. Use this first when jobs fail at scale.
+counts, and last-24h job success rate — use it when jobs fail at scale.
 
 The **Jobs** page (`/admin/jobs`) lists trip-generation runs with status/keyword filters.
 After an outage leaves a wave of failures, filter to `Failed` (and optionally a keyword)

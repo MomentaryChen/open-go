@@ -296,6 +296,7 @@ export const en: Dictionary = {
     brand: 'Travel Discovery',
     sidebarTitle: 'Admin',
     nav: {
+      dashboard: 'Dashboard',
       health: 'Health',
       jobs: 'Jobs',
       keywords: 'Keywords',
@@ -327,6 +328,35 @@ export const en: Dictionary = {
       password: 'Password',
       submitting: 'Logging in…',
       submit: 'Log in',
+    },
+
+    dashboard: {
+      title: 'Dashboard',
+      subtitle:
+        'Stuck jobs, high-failure keywords, affiliate CTR, and storage usage at a glance',
+      viewAll: 'View all',
+      openJobs: 'Open jobs',
+      openSettings: 'Open settings',
+      emptyKeywords: 'No high-failure keywords in the last 30 days',
+      emptyAffiliate: 'No CTA events in the last 30 days',
+      emptyStorage: 'Storage usage unavailable',
+      stat: {
+        stuck: 'Stuck jobs',
+        stuckHint: 'No progress for over {minutes} minutes',
+        highFailure: 'High-failure keywords',
+        ctr: 'Affiliate CTR',
+        ctrHint: '{clicks} clicks / {impressions} impressions',
+        storage: 'Content storage',
+        storageHint: '{jobs} jobs · {documents} docs still hold content',
+      },
+      sections: {
+        keywords: 'High-failure keywords',
+        keywordsHint: 'Last {days} days · failure rate > 30% with 2+ runs',
+        affiliate: 'Affiliate funnel',
+        affiliateHint: 'CTA impressions and clicks over the last {days} days',
+        storage: 'Storage usage',
+        storageHint: 'Document content and crawl cache (cleanup lives under Settings)',
+      },
     },
 
     status: {
