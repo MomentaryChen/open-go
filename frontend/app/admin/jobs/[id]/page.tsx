@@ -3,7 +3,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, ExternalLink, RefreshCw, RotateCw, Square } from 'lucide-react'
+import {
+  ArrowLeft,
+  ExternalLink,
+  EyeOff,
+  Pin,
+  RefreshCw,
+  RotateCw,
+  Square,
+  Star,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -22,6 +31,8 @@ import {
   cancelJob,
   getJobDetail,
   retryJob,
+  setJobCuration,
+  type JobCuration,
   type JobDetail,
   type JobPreferences,
 } from '@/lib/admin'
@@ -76,6 +87,7 @@ export default function AdminJobDetailPage() {
   const [loading, setLoading] = useState(true)
   const [retrying, setRetrying] = useState(false)
   const [cancelling, setCancelling] = useState(false)
+  const [curatingKey, setCuratingKey] = useState<keyof JobCuration | null>(null)
 
   const refresh = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -132,6 +144,25 @@ export default function AdminJobDetailPage() {
       toast.error((error as Error).message)
     } finally {
       setCancelling(false)
+    }
+  }
+
+  const toggleCuration = async (key: keyof JobCuration) => {
+    if (!job?.itinerary) return
+    setCuratingKey(key)
+    try {
+      const next = await setJobCuration(job.id, { [key]: !job.itinerary[key] })
+      // Merge the authoritative new state back into the itinerary.
+      setJob((prev) =>
+        prev?.itinerary
+          ? { ...prev, itinerary: { ...prev.itinerary, ...next } }
+          : prev,
+      )
+      toast.success(t.admin.curation.updated)
+    } catch (error) {
+      toast.error((error as Error).message || t.admin.curation.updateFailed)
+    } finally {
+      setCuratingKey(null)
     }
   }
 
@@ -211,6 +242,53 @@ export default function AdminJobDetailPage() {
           <Field label={t.admin.jobDetail.model} value={job.itinerary?.model ?? '—'} />
         </div>
       </Card>
+
+      {job.itinerary && (
+        <Card className="gap-3 p-4">
+          <div>
+            <p className="text-sm font-medium">{t.admin.curation.title}</p>
+            <p className="text-xs text-muted-foreground">{t.admin.curation.hint}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant={job.itinerary.pinned ? 'default' : 'outline'}
+              size="sm"
+              disabled={curatingKey !== null}
+              aria-pressed={job.itinerary.pinned}
+              title={t.admin.curation.pinnedHint}
+              onClick={() => void toggleCuration('pinned')}
+            >
+              <Pin className="h-4 w-4" />
+              {t.admin.curation.pinned}
+            </Button>
+            <Button
+              type="button"
+              variant={job.itinerary.featured ? 'default' : 'outline'}
+              size="sm"
+              disabled={curatingKey !== null}
+              aria-pressed={job.itinerary.featured}
+              title={t.admin.curation.featuredHint}
+              onClick={() => void toggleCuration('featured')}
+            >
+              <Star className="h-4 w-4" />
+              {t.admin.curation.featured}
+            </Button>
+            <Button
+              type="button"
+              variant={job.itinerary.hidden ? 'destructive' : 'outline'}
+              size="sm"
+              disabled={curatingKey !== null}
+              aria-pressed={job.itinerary.hidden}
+              title={t.admin.curation.hiddenHint}
+              onClick={() => void toggleCuration('hidden')}
+            >
+              <EyeOff className="h-4 w-4" />
+              {t.admin.curation.hidden}
+            </Button>
+          </div>
+        </Card>
+      )}
 
       <Card className="gap-3 p-4">
         <p className="text-sm font-medium">{t.admin.jobDetail.preferences}</p>

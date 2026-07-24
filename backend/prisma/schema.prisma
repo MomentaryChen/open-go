@@ -182,5 +182,12 @@ model TripItinerary {
   data      Json
   model     String
   createdAt DateTime @default(now())
+  /// Curation flags for the public explore gallery. A finished job's itinerary
+  /// is auto-included in the gallery; these let an admin turn that feed into a
+  /// showcase wall. `hidden` removes it non-destructively (unlike deleting the
+  /// job); `pinned`/`featured` promote it in the gallery ordering.
+  pinned    Boolean  @default(false)
+  hidden    Boolean  @default(false)
+  featured  Boolean  @default(false)
   job       TripJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
 }

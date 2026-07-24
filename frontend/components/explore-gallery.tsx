@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { CalendarDays, FileText, MapPin, Search, X } from 'lucide-react'
+import { CalendarDays, FileText, MapPin, Pin, Search, Star, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { fmt } from '@/lib/i18n'
 import { useLanguage } from '@/lib/i18n/context'
@@ -20,6 +20,10 @@ export type GalleryTrip = {
   dayCount: number
   summary: string
   sourceCount: number
+  /** Curation: pinned trips lead the gallery. */
+  pinned: boolean
+  /** Curation: featured trips rank above regular ones. */
+  featured: boolean
 }
 
 const ALL = '__all__'
@@ -220,10 +224,24 @@ function TripCard({ trip }: { trip: GalleryTrip }) {
       className="group flex h-full flex-col rounded-2xl border border-border bg-card p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
-          <MapPin className="h-3 w-3" aria-hidden />
-          {trip.destination}
-        </span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+            <MapPin className="h-3 w-3" aria-hidden />
+            {trip.destination}
+          </span>
+          {trip.pinned && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+              <Pin className="h-3 w-3" aria-hidden />
+              {t.explore.pinnedBadge}
+            </span>
+          )}
+          {trip.featured && !trip.pinned && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+              <Star className="h-3 w-3" aria-hidden />
+              {t.explore.featuredBadge}
+            </span>
+          )}
+        </div>
         <span className="shrink-0 text-xs text-muted-foreground">
           {timeAgo(trip.createdAt, locale)}
         </span>
