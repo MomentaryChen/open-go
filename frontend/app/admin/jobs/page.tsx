@@ -7,13 +7,17 @@ import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
+  EyeOff,
+  Pin,
   RefreshCw,
   RotateCw,
   Search,
   Square,
+  Star,
   Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { Badge } from '@/components/ui/badge'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -417,6 +421,34 @@ function JobsPageContent() {
                         {job.error}
                       </p>
                     )}
+                    {job.curation &&
+                      (job.curation.pinned ||
+                        job.curation.featured ||
+                        job.curation.hidden) && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {job.curation.pinned && (
+                            <Badge variant="secondary" className="gap-1">
+                              <Pin className="h-3 w-3" />
+                              {t.admin.curation.pinned}
+                            </Badge>
+                          )}
+                          {job.curation.featured && (
+                            <Badge variant="secondary" className="gap-1">
+                              <Star className="h-3 w-3" />
+                              {t.admin.curation.featured}
+                            </Badge>
+                          )}
+                          {job.curation.hidden && (
+                            <Badge
+                              variant="outline"
+                              className="gap-1 text-muted-foreground"
+                            >
+                              <EyeOff className="h-3 w-3" />
+                              {t.admin.curation.hidden}
+                            </Badge>
+                          )}
+                        </div>
+                      )}
                   </TableCell>
                   <TableCell>
                     <JobStatusBadge status={job.status} />

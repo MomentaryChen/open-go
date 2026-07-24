@@ -236,6 +236,8 @@ export const zh = {
     countActive: '{active} · {count} 個行程',
     days: '{n} 天',
     sources: '{n} 篇來源',
+    pinnedBadge: '置頂',
+    featuredBadge: '精選',
   },
 
   video: {
@@ -435,6 +437,20 @@ export const zh = {
       itineraryEmpty: '此任務尚未產生行程',
       notFound: '找不到此任務',
       newJobCreated: '已建立新任務',
+    },
+
+    curation: {
+      title: '展示牆策展',
+      hint: '設定此行程在前台探索頁的呈現方式。',
+      pinned: '置頂',
+      featured: '精選',
+      hidden: '隱藏',
+      pinnedHint: '排在展示牆最前面',
+      featuredHint: '排在一般行程之前',
+      hiddenHint: '不會出現在前台探索頁',
+      needsItinerary: '只有已完成並產生行程的任務可以策展。',
+      updated: '已更新策展設定',
+      updateFailed: '無法更新策展設定',
     },
 
     keywords: {

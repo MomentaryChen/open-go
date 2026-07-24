@@ -37,6 +37,13 @@ export type JobFilterParams = {
   limit?: number;
 };
 
+/** Explore-gallery curation flags; each is optional so a patch is partial. */
+export type JobCurationPatch = {
+  pinned?: boolean;
+  hidden?: boolean;
+  featured?: boolean;
+};
+
 @Injectable()
 export class AdminJobsService {
   private readonly logger = new Logger(AdminJobsService.name);
@@ -81,7 +88,15 @@ export class AdminJobsService {
         take: pageSize,
         include: {
           _count: { select: { documents: true, queries: true } },
-          itinerary: { select: { id: true, model: true } },
+          itinerary: {
+            select: {
+              id: true,
+              model: true,
+              pinned: true,
+              hidden: true,
+              featured: true,
+            },
+          },
         },
       }),
     ]);
@@ -104,6 +119,15 @@ export class AdminJobsService {
         queryCount: job._count.queries,
         hasItinerary: Boolean(job.itinerary),
         model: job.itinerary?.model ?? null,
+        // Only finished jobs have an itinerary, so `curation` is null for
+        // everything not eligible for the gallery.
+        curation: job.itinerary
+          ? {
+              pinned: job.itinerary.pinned,
+              hidden: job.itinerary.hidden,
+              featured: job.itinerary.featured,
+            }
+          : null,
       })),
     };
   }
@@ -219,6 +243,48 @@ export class AdminJobsService {
     this.queue.cancel(jobId);
     await this.prisma.tripJob.delete({ where: { id: jobId } });
     return { ok: true };
+  }
+
+  /**
+   * Sets the explore-gallery curation flags on a job's itinerary. Only finished
+   * jobs have an itinerary, so a job that never produced one cannot be curated.
+   * A partial patch is allowed — only the provided flags change.
+   */
+  async setCuration(jobId: string, patch: JobCurationPatch) {
+    const data: Prisma.TripItineraryUpdateInput = {};
+    for (const key of ['pinned', 'hidden', 'featured'] as const) {
+      const value = patch[key];
+      if (value === undefined) continue;
+      if (typeof value !== 'boolean') {
+        throw new BadRequestException(`${key} must be a boolean`);
+      }
+      data[key] = value;
+    }
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException(
+        'Provide at least one of pinned, hidden, featured',
+      );
+    }
+
+    try {
+      // Keyed by the unique jobId; P2025 means no itinerary row exists yet.
+      const updated = await this.prisma.tripItinerary.update({
+        where: { jobId },
+        data,
+        select: { pinned: true, hidden: true, featured: true },
+      });
+      return updated;
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException(
+          `Trip job ${jobId} has no itinerary to curate`,
+        );
+      }
+      throw error;
+    }
   }
 
   /**

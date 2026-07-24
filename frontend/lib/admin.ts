@@ -131,6 +131,13 @@ export function revertSetting(key: string, historyId: string) {
 // Job monitoring
 // ---------------------------------------------------------------------------
 
+/** Explore-gallery curation state for a finished job's itinerary. */
+export type JobCuration = {
+  pinned: boolean
+  hidden: boolean
+  featured: boolean
+}
+
 export type JobSummary = {
   id: string
   keyword: string
@@ -145,6 +152,8 @@ export type JobSummary = {
   queryCount: number
   hasItinerary: boolean
   model: string | null
+  /** Null for jobs without an itinerary (not gallery-eligible). */
+  curation: JobCuration | null
 }
 
 export type JobListResult = {
@@ -219,6 +228,9 @@ export type JobDetail = {
     data: unknown
     model: string
     createdAt: string
+    pinned: boolean
+    hidden: boolean
+    featured: boolean
   } | null
 }
 
@@ -265,6 +277,17 @@ export function deleteJob(id: string) {
   return request<{ ok: boolean }>(
     `/api/admin/ops/jobs/${encodeURIComponent(id)}`,
     { method: 'DELETE' },
+  )
+}
+
+/**
+ * Sets explore-gallery curation flags on a finished job's itinerary. A partial
+ * patch is allowed — only the provided flags change. Returns the new state.
+ */
+export function setJobCuration(id: string, patch: Partial<JobCuration>) {
+  return request<JobCuration>(
+    `/api/admin/ops/jobs/${encodeURIComponent(id)}/curation`,
+    { method: 'PATCH', body: JSON.stringify(patch) },
   )
 }
 

@@ -5,6 +5,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -16,6 +17,7 @@ import { RetentionService } from '../retention/retention.service';
 import { AdminGuard } from '../settings/admin.guard';
 import { AdminAnalyticsService } from './admin-analytics.service';
 import { AdminJobsService } from './admin-jobs.service';
+import type { JobCurationPatch } from './admin-jobs.service';
 
 /** A job with no progress for this long is treated as stranded by a restart. */
 const DEFAULT_STUCK_MINUTES = 30;
@@ -112,6 +114,12 @@ export class AdminController {
   @Delete('jobs/:id')
   deleteJob(@Param('id') id: string) {
     return this.jobs.remove(id);
+  }
+
+  /** Sets explore-gallery curation flags (pin / hide / feature) on a job's itinerary. */
+  @Patch('jobs/:id/curation')
+  setJobCuration(@Param('id') id: string, @Body() body?: JobCurationPatch) {
+    return this.jobs.setCuration(id, body ?? {});
   }
 
   @Get('analytics/keywords')

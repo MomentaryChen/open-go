@@ -250,6 +250,8 @@ export const en: Dictionary = {
     countActive: '{active} · {count} trips',
     days: '{n} days',
     sources: '{n} sources',
+    pinnedBadge: 'Pinned',
+    featuredBadge: 'Featured',
   },
 
   video: {
@@ -453,6 +455,20 @@ export const en: Dictionary = {
       itineraryEmpty: 'This job has not produced an itinerary yet',
       notFound: 'Job not found',
       newJobCreated: 'New job created',
+    },
+
+    curation: {
+      title: 'Gallery curation',
+      hint: 'Choose how this trip appears in the public explore gallery.',
+      pinned: 'Pinned',
+      featured: 'Featured',
+      hidden: 'Hidden',
+      pinnedHint: 'Leads the gallery',
+      featuredHint: 'Ranks above regular trips',
+      hiddenHint: 'Hidden from the public gallery',
+      needsItinerary: 'Only finished trips with an itinerary can be curated.',
+      updated: 'Curation updated',
+      updateFailed: 'Could not update curation',
     },
 
     keywords: {

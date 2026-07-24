@@ -331,23 +331,41 @@ export class TripService implements OnModuleInit {
   }
 
   /**
-   * Public gallery of every finished itinerary, newest first, trimmed to the
-   * fields a browse card needs. The region is the itinerary's `destination`
-   * (the same value POIs are ingested under), so the frontend can group by it
-   * without a separate taxonomy. The full itinerary JSON is read to pull those
-   * few fields and then discarded — fine at this app's scale, and it keeps the
-   * response small for the client.
+   * Public gallery of every finished itinerary, trimmed to the fields a browse
+   * card needs. The region is the itinerary's `destination` (the same value
+   * POIs are ingested under), so the frontend can group by it without a
+   * separate taxonomy. The full itinerary JSON is read to pull those few fields
+   * and then discarded — fine at this app's scale, and it keeps the response
+   * small for the client.
+   *
+   * Curation (admin-set on the itinerary): `hidden` rows are excluded here, and
+   * the order is pinned first, then featured, then newest — so a curated
+   * showcase leads while everything else stays a recency feed.
    */
   async listGallery(limit = 200) {
     const jobs = await this.prisma.tripJob.findMany({
-      where: { status: 'done', itinerary: { isNot: null } },
-      orderBy: { createdAt: 'desc' },
+      // `itinerary: { hidden: false }` also requires the itinerary to exist
+      // (a to-one relation filter never matches a null relation), so it both
+      // drops hidden entries and keeps the "must have an itinerary" guarantee.
+      where: { status: 'done', itinerary: { is: { hidden: false } } },
+      orderBy: [
+        { itinerary: { pinned: 'desc' } },
+        { itinerary: { featured: 'desc' } },
+        { createdAt: 'desc' },
+      ],
       take: limit,
       select: {
         id: true,
         keyword: true,
         createdAt: true,
-        itinerary: { select: { summary: true, data: true } },
+        itinerary: {
+          select: {
+            summary: true,
+            data: true,
+            pinned: true,
+            featured: true,
+          },
+        },
         _count: { select: { documents: true } },
       },
     });
@@ -372,6 +390,8 @@ export class TripService implements OnModuleInit {
           dayCount: days,
           summary: job.itinerary?.summary ?? '',
           sourceCount: job._count.documents,
+          pinned: job.itinerary?.pinned ?? false,
+          featured: job.itinerary?.featured ?? false,
         },
       ];
     });
