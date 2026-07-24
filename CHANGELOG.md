@@ -3,12 +3,25 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [1.0.0] - 2026-07-24
 
-### Fixed
-- Fixed admin keyword analytics (`/admin/keywords`) failing to load: the host stats query joined `TripDocument` and `TripJob` without qualifying `status` / `url`, so PostgreSQL rejected the ambiguous column reference and the page's parallel fetch aborted.
+First public release of open-go: a keyword-driven AI travel planner with a grounded,
+source-cited itinerary pipeline and a runtime-configurable admin console.
 
 ### Added
+- Added keyword input guard for the trip planner: rejects URLs, HTML tags, control characters, emoji/symbol-only input, and gibberish before the pipeline spends LLM or search quota. Validation runs on both client (instant feedback) and server (authoritative), with i18n error messages in zh-TW and English.
+- Added LLM token usage tracking: every Anthropic/Gemini call records its billed tokens (input, output, cache read/write, thinking) to a new `LlmUsage` table, captured fire-and-forget so bookkeeping can never fail the call itself. Admin gains `GET /ops/analytics/llm-usage` (daily + per-model rollups with list-price cost estimates) and an `/admin/llm-usage` page with stat cards, a daily token chart, and a per-model breakdown.
+- Added an admin **Dashboard** at `/admin` (no longer redirects away): overview cards and sections for stuck jobs, high-failure keywords, affiliate CTR, and storage usage, composed from existing ops APIs (`/ops/jobs/stats`, `/ops/analytics/keywords`, `/ops/analytics/affiliate`, `/ops/retention`). System health remains at `/admin/health`.
+- Added explore-gallery curation on the admin Jobs console (`PATCH /ops/jobs/:id/curation`): finished itineraries can be pinned, featured, or hidden from the public `/explore` list.
+- Added public SEO surfaces for finished itineraries: `/sitemap.xml` (`app/sitemap.ts`) enumerates finished trips and `/robots.txt` (`app/robots.ts`) points crawlers at it.
+- Added manual source-host allow/deny lists on `/admin/keywords` (Source hosts tab): operators can temporarily unblock an auto-blocked site or force-skip a junk domain. Lists persist as `trip.hostAllowlist` / `trip.hostDenylist` settings and are applied at crawl URL selection (allow overrides static + auto blocks; deny always skips). APIs: `GET/PUT /ops/hosts/policy`, `PUT /ops/hosts/override`.
+- Added an admin system health panel at `/admin/health` (`GET /ops/health`) that surfaces database connectivity, Playwright/search browser readiness, Gemini/Anthropic API key presence, live queue running/queued counts, and last-24h job success rate for triage when jobs fail at scale.
+- Added admin cancel for active trip jobs (`POST /ops/jobs/:id/cancel`): drops queued work from the in-process backlog or aborts a running pipeline at the next checkpoint, marks the job `cancelled` (kept for history / retry), and exposes Cancel actions on the jobs list and job detail pages.
+- Added keyword search on the public trip explorer (`/explore`): filter finished itineraries by keyword, title, destination, or summary, combined with the existing region tabs.
+- Added top-N failure-reason aggregation on `/admin/keywords`: `GET /ops/analytics/failure-reasons` groups failed `TripJob.error` strings (exact match) so operators can see clusters like search blocked, empty crawl, or LLM timeouts without a new taxonomy table.
+- Added filter-based batch retry/delete on the admin Jobs page (`POST /ops/jobs/batch-retry`, `POST /ops/jobs/batch-delete`): after setting a status and/or keyword filter (e.g. all `failed` after a search outage), retry or delete up to 100 matching jobs in one confirmation instead of clicking row by row.
+- Enriched admin job detail (`/admin/jobs/[id]`): shows traveller preferences, a one-click link to the public `/trip/[jobId]` page, and per-document crawl failure reasons (persisted on `TripDocument.error` for new crawls).
+- Added a Pipeline tuning card on `/admin/settings` (alongside the LLM card) for `trip.targetDocuments`, `trip.crawlConcurrency`, `trip.cacheTtlDays`, `trip.resultsPerQuery`, `trip.maxDocumentsPerHost`, and `trip.maxConcurrentJobs`, so operators can edit these runtime knobs without hunting the KV table.
 - Added affiliate conversion CTAs on finished itineraries: overnight `stay` blocks link to Booking / Agoda / Google Hotels (with lat-lng radius when coordinates exist), and attraction stops offer Klook / KKday ticket searches with a destination hot-ticket fallback.
 - Added affiliate funnel tracking (`cta_impression`, `cta_click`, `outbound_redirect`) persisted to an `AffiliateEvent` table via `POST /affiliate/events`, mirrored to Vercel Analytics, and summarized in the admin console at `/admin/affiliate` (`GET /ops/analytics/affiliate`).
 - Added a keyword-driven AI trip planning pipeline: `POST /trips` decomposes a keyword into search queries with Claude, collects 30 web pages, stores their extracted text, and composes a structured day-by-day itinerary that cites its sources.
@@ -36,3 +49,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Added `GET /regions/:id/categories` to return per-category POI counts for frontend filter tabs/badges.
 - Update `docker:all` to run Prisma migrations automatically via `docker:migrate` after containers are up.
 - Changed Docker Compose restart policy for `postgres`, `backend`, and `frontend` from `unless-stopped` to `no` so containers no longer auto-start with the Docker daemon.
+
+### Fixed
+- Fixed admin sidebar bottom buttons (language toggle, back-to-site, logout) being pushed off-screen when main content is tall; the sidebar is now sticky with a viewport-height constraint.
+- Fixed admin keyword analytics (`/admin/keywords`) failing to load: the host stats query joined `TripDocument` and `TripJob` without qualifying `status` / `url`, so PostgreSQL rejected the ambiguous column reference and the page's parallel fetch aborted.
+
+[1.0.0]: https://github.com/MomentaryChen/open-go/releases/tag/v1.0.0

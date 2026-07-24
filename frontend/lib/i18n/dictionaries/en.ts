@@ -81,6 +81,15 @@ export const en: Dictionary = {
       'Lost connection to the server. The itinerary may still be generating — resume it later from “Recent searches”.',
     createJobFailed: 'Failed to create job ({status})',
     readCacheFailed: 'Failed to read the cached result',
+    keywordError: {
+      KEYWORD_TOO_SHORT: 'Please enter at least 2 characters',
+      KEYWORD_TOO_LONG: 'Keyword must be 200 characters or fewer',
+      KEYWORD_HAS_URL: 'Please enter a travel destination, not a URL',
+      KEYWORD_HAS_HTML: 'Keyword contains invalid HTML content',
+      KEYWORD_NO_WORDS: 'Please enter a keyword with actual text',
+      KEYWORD_CONTROL_CHARS: 'Keyword contains invalid characters',
+      KEYWORD_EXCESSIVE_SPECIAL: 'Too many special characters — please enter a normal travel keyword',
+    },
   },
 
   tripProgress: {
@@ -237,15 +246,21 @@ export const en: Dictionary = {
     badge: 'Trip explorer',
     heading: 'Trips everyone has searched',
     subtitle:
-      'Every AI-generated trip, grouped by region. Tap any card to see the full day-by-day plan.',
+      'Every AI-generated trip — search by keyword or filter by region. Tap any card to see the full day-by-day plan.',
     empty: 'No completed trips yet.',
     emptyCta: 'Plan the first trip →',
+    searchPlaceholder: 'Search keyword, title, or place…',
+    searchAria: 'Search trips',
+    clearSearch: 'Clear search',
+    noResults: 'No trips match “{query}”.',
     filterByRegion: 'Filter by region',
     all: 'All',
     countLine: '{trips} trips · {regions} regions',
     countActive: '{active} · {count} trips',
     days: '{n} days',
     sources: '{n} sources',
+    pinnedBadge: 'Pinned',
+    featuredBadge: 'Featured',
   },
 
   video: {
@@ -274,7 +289,7 @@ export const en: Dictionary = {
       'Type a keyword and AI reads the web’s travelogues to build a day-by-day, ready-to-go trip — every item cited.',
     exploreTitle: 'Explore trips ｜ OpenGo',
     exploreDescription:
-      'Browse every AI-generated trip, grouped by region — tap in for the day-by-day plan.',
+      'Browse every AI-generated trip — search by keyword or filter by region, then tap in for the day-by-day plan.',
     tripNotFoundTitle: 'Trip not found ｜ OpenGo',
     tripTitle: '{title} ｜ {destination} {days}-day trip',
     tripDescription: 'A {destination} {days}-day trip compiled by AI from {sources} travelogues.',
@@ -292,9 +307,12 @@ export const en: Dictionary = {
     brand: 'Travel Discovery',
     sidebarTitle: 'Admin',
     nav: {
+      dashboard: 'Dashboard',
+      health: 'Health',
       jobs: 'Jobs',
       keywords: 'Keywords',
       affiliate: 'Affiliate funnel',
+      llmUsage: 'LLM usage',
       prompts: 'Prompts',
       settings: 'Settings',
     },
@@ -324,6 +342,35 @@ export const en: Dictionary = {
       submit: 'Log in',
     },
 
+    dashboard: {
+      title: 'Dashboard',
+      subtitle:
+        'Stuck jobs, high-failure keywords, affiliate CTR, and storage usage at a glance',
+      viewAll: 'View all',
+      openJobs: 'Open jobs',
+      openSettings: 'Open settings',
+      emptyKeywords: 'No high-failure keywords in the last 30 days',
+      emptyAffiliate: 'No CTA events in the last 30 days',
+      emptyStorage: 'Storage usage unavailable',
+      stat: {
+        stuck: 'Stuck jobs',
+        stuckHint: 'No progress for over {minutes} minutes',
+        highFailure: 'High-failure keywords',
+        ctr: 'Affiliate CTR',
+        ctrHint: '{clicks} clicks / {impressions} impressions',
+        storage: 'Content storage',
+        storageHint: '{jobs} jobs · {documents} docs still hold content',
+      },
+      sections: {
+        keywords: 'High-failure keywords',
+        keywordsHint: 'Last {days} days · failure rate > 30% with 2+ runs',
+        affiliate: 'Affiliate funnel',
+        affiliateHint: 'CTA impressions and clicks over the last {days} days',
+        storage: 'Storage usage',
+        storageHint: 'Document content and crawl cache (cleanup lives under Settings)',
+      },
+    },
+
     status: {
       pending: 'Queued',
       planning: 'Planning',
@@ -332,6 +379,7 @@ export const en: Dictionary = {
       composing: 'Composing',
       done: 'Done',
       failed: 'Failed',
+      cancelled: 'Cancelled',
     },
 
     range: {
@@ -356,6 +404,7 @@ export const en: Dictionary = {
         done: 'Done',
         failed: 'Failed',
         pending: 'Queued',
+        cancelled: 'Cancelled',
       },
       markAllFailed: 'Mark all as failed',
       stat: {
@@ -369,6 +418,18 @@ export const en: Dictionary = {
       p95Hint: 'P95 {value}',
       stuckBanner:
         '{count} jobs have made no progress for over {minutes} minutes — likely leftovers from a backend restart',
+      batchRetry: 'Retry matching ({n})',
+      batchDelete: 'Delete matching ({n})',
+      batchRetryTitle: 'Retry {n} matching jobs?',
+      batchRetryDescription:
+        'Creates a new run for each matching job (up to 100), bypassing the cache. Original jobs are kept as history.',
+      batchDeleteTitle: 'Delete {n} matching jobs?',
+      batchDeleteDescription:
+        'Permanently deletes matching jobs and their queries, documents, and itineraries (up to 100). This cannot be undone.',
+      batchRetried: 'Retried {n} jobs',
+      batchRetriedTruncated: 'Retried {n} of {matched} matching jobs (cap {limit})',
+      batchDeleted: 'Deleted {n} jobs',
+      batchDeletedTruncated: 'Deleted {n} of {matched} matching jobs (cap {limit})',
       col: {
         keyword: 'Keyword',
         status: 'Status',
@@ -383,6 +444,12 @@ export const en: Dictionary = {
       empty: 'No jobs match the filters',
       retry: 'Retry',
       retryAria: 'Retry {keyword}',
+      cancel: 'Cancel',
+      cancelAria: 'Cancel {keyword}',
+      cancelTitle: 'Cancel job “{keyword}”?',
+      cancelDescription:
+        'Stops the pipeline at the next checkpoint. The job stays in history as Cancelled and can still be retried or deleted.',
+      cancelled: 'Cancelled “{keyword}”',
       deleteAria: 'Delete {keyword}',
       deleteTitle: 'Delete job “{keyword}”?',
       deleteDescription:
@@ -398,11 +465,16 @@ export const en: Dictionary = {
       failReason: 'Failure reason',
       retrying: 'Running…',
       retry: 'Retry',
+      cancelling: 'Cancelling…',
+      cancel: 'Cancel job',
       backToList: 'Back to job list',
+      openFrontend: 'Open trip page',
       createdAt: 'Created',
       updatedAt: 'Last updated',
       duration: 'Duration',
       model: 'Model',
+      preferences: 'Traveller preferences',
+      preferencesEmpty: 'No preferences set (keyword only)',
       tabDocuments: 'Docs ({n})',
       tabQueries: 'Queries ({n})',
       tabItinerary: 'Itinerary',
@@ -411,6 +483,7 @@ export const en: Dictionary = {
       docPending: 'Pending {n}',
       docColTitle: 'Title / URL',
       docColStatus: 'Status',
+      docColError: 'Failure reason',
       docColFetchedAt: 'Fetched at',
       docEmpty: 'No documents yet',
       queryColText: 'Query',
@@ -423,6 +496,20 @@ export const en: Dictionary = {
       itineraryEmpty: 'This job has not produced an itinerary yet',
       notFound: 'Job not found',
       newJobCreated: 'New job created',
+    },
+
+    curation: {
+      title: 'Gallery curation',
+      hint: 'Choose how this trip appears in the public explore gallery.',
+      pinned: 'Pinned',
+      featured: 'Featured',
+      hidden: 'Hidden',
+      pinnedHint: 'Leads the gallery',
+      featuredHint: 'Ranks above regular trips',
+      hiddenHint: 'Hidden from the public gallery',
+      needsItinerary: 'Only finished trips with an itinerary can be curated.',
+      updated: 'Curation updated',
+      updateFailed: 'Could not update curation',
     },
 
     keywords: {
@@ -452,21 +539,39 @@ export const en: Dictionary = {
       gapsCol: { keyword: 'Keyword', jobs: 'Jobs', avgDocs: 'Avg docs', lastQuery: 'Last query' },
       gapsEmpty: 'No thin-content keywords',
       hostsIntro:
-        'Crawl success rate per host. Hosts marked “Auto-blocked” are skipped in later jobs (tried 3+ times and never succeeded).',
+        'Crawl success rate per host. Auto-blocked hosts (3+ tries, never succeeded) and the static social blocklist are skipped in later jobs. Use Allow to temporarily unblock a site, or Block to force-skip junk sources.',
       hostsCol: {
         host: 'Host',
         attempts: 'Attempts',
         success: 'Success',
         successRate: 'Success rate',
         status: 'Status',
+        actions: 'Actions',
       },
       hostsEmpty: 'Not enough crawl records in this range',
       autoBlocked: 'Auto-blocked',
+      hostWhitelisted: 'Allowlisted',
+      hostBlacklisted: 'Blocklisted',
+      hostStaticBlocked: 'Static block',
+      hostAddLabel: 'Add host',
+      hostAddPlaceholder: 'example.com',
+      hostActionAllow: 'Allow',
+      hostActionDeny: 'Block',
+      hostActionClear: 'Clear',
+      hostAllowSaved: 'Host allowlisted — crawler will not skip it',
+      hostDenySaved: 'Host blocklisted — crawler will skip it',
+      hostClearSaved: 'Host override cleared',
       chartTitle: 'Daily query volume',
       chartDone: 'Done',
       chartFailed: 'Failed',
       chartEmpty: 'No data in this range',
       chartTooltip: '{date}\nTotal {total} · Done {done} · Failed {failed}',
+      reasonsTitle: 'Top failure reasons',
+      reasonsIntro:
+        'Grouped by the exact TripJob.error message (search blocked, empty crawl, LLM timeout, …). No separate error taxonomy.',
+      reasonsEmpty: 'No failed jobs with an error message in this range',
+      reasonsTotal: '{n} failed jobs with an error message',
+      reasonsCol: { error: 'Error', count: 'Count', share: 'Share' },
     },
 
     prompts: {
@@ -580,6 +685,68 @@ export const en: Dictionary = {
       ctr: 'CTR',
     },
 
+    llmUsage: {
+      title: 'LLM usage',
+      subtitle: 'Daily token burn and estimated cost of Claude / Gemini calls',
+      stat: {
+        calls: 'API calls',
+        inputTokens: 'Input tokens',
+        outputTokens: 'Output tokens',
+        estimatedCost: 'Estimated cost',
+        estimatedCostHint: 'List-price estimate; models without pricing data excluded',
+      },
+      chartTitle: 'Daily tokens',
+      chartInput: 'Input (incl. cache)',
+      chartOutput: 'Output (incl. thinking)',
+      chartEmpty: 'No LLM calls in this range',
+      chartTooltip: '{date}: {input} input / {output} output tokens, ≈ {cost}',
+      byModelTitle: 'By model',
+      col: {
+        model: 'Model',
+        calls: 'Calls',
+        input: 'Input',
+        output: 'Output',
+        cacheRead: 'Cache read',
+        thinking: 'Thinking',
+        cost: 'Est. cost',
+      },
+      empty: 'No usage recorded yet — token logging starts with this release',
+      unknownPrice: 'No pricing data',
+    },
+
+    pipeline: {
+      title: 'Pipeline tuning',
+      description:
+        'Runtime knobs for search, crawl, cache, and queue concurrency; applies to the next job after saving, no restart',
+      footer: 'Writes the same trip.* keys as the table below; missing keys are created on save.',
+      invalid: 'Each value must be an integer at or above its minimum',
+      updated: 'Pipeline settings updated; applies to the next job',
+      fields: {
+        targetDocuments: 'Target documents',
+        crawlConcurrency: 'Crawl concurrency',
+        cacheTtlDays: 'Cache TTL (days)',
+        resultsPerQuery: 'Results per query',
+        maxDocumentsPerHost: 'Max docs per host',
+        maxConcurrentJobs: 'Max concurrent jobs',
+      },
+      help: {
+        targetDocuments: 'Articles to collect and crawl per job (min 1)',
+        crawlConcurrency: 'Parallel page fetches inside one job (min 1)',
+        cacheTtlDays: 'Reuse a finished job for the same keyword; 0 disables',
+        resultsPerQuery: 'Max search hits taken from one query (min 1)',
+        maxDocumentsPerHost: 'Cap per host so sources stay diverse (min 1)',
+        maxConcurrentJobs: 'Whole pipelines allowed to run at once (min 1)',
+      },
+      desc: {
+        targetDocuments: 'Articles to collect and crawl per job',
+        crawlConcurrency: 'Parallel page fetches inside one job',
+        cacheTtlDays: 'Days a finished job satisfies the same keyword again (0 disables)',
+        resultsPerQuery: 'Max results taken from a single search query',
+        maxDocumentsPerHost: 'Max documents from one host, to keep sources diverse',
+        maxConcurrentJobs: 'Whole pipelines allowed to run at once',
+      },
+    },
+
     llm: {
       title: 'LLM model',
       description: 'The LLM used for trip generation; applies to the next job after saving, no restart',
@@ -636,6 +803,51 @@ export const en: Dictionary = {
       confirmRun: 'Run cleanup',
       cleaned: 'Cleanup complete',
       cleanedDesc: 'Stripped {content} contents, deleted {jobs} jobs, {cache} expired cache entries',
+    },
+
+    health: {
+      title: 'System health',
+      subtitle:
+        'First stop when jobs fail at scale: database, browsers, LLM keys, queue, and last-24h success rate',
+      overall: 'Overall',
+      checkedAt: 'Checked at {time}',
+      status: {
+        ok: 'OK',
+        warn: 'Warning',
+        error: 'Error',
+      },
+      database: {
+        title: 'Database',
+        latency: 'Latency {ms} ms',
+      },
+      browsers: {
+        title: 'Playwright / search browser',
+        search: 'Search browser',
+        crawl: 'Crawl fallback browser',
+        chromium: 'Chromium',
+        enabled: 'Enabled',
+        disabled: 'Disabled',
+        launched: 'Running',
+        idle: 'Not started',
+        available: 'Available {version}',
+        unavailable: 'Unavailable',
+      },
+      llm: {
+        title: 'LLM API keys',
+        active: 'Active: {provider} · {model}',
+        configured: 'Configured',
+        missing: 'Missing',
+      },
+      queue: {
+        title: 'Queue',
+        running: 'Running',
+        queued: 'Queued',
+      },
+      last24h: {
+        title: 'Success rate (24h)',
+        doneFailed: 'Done {done} · Failed {failed}',
+        noFinished: 'No finished jobs yet',
+      },
     },
   },
 }

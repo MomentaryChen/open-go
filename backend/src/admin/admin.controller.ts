@@ -5,6 +5,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -14,8 +15,14 @@ import { AffiliateConfigService } from '../affiliate/affiliate-config.service';
 import type { AffiliateConfigInput } from '../affiliate/affiliate-config.service';
 import { RetentionService } from '../retention/retention.service';
 import { AdminGuard } from '../settings/admin.guard';
+import {
+  HostPolicyService,
+  type HostOverrideAction,
+} from '../trip/host-policy.service';
 import { AdminAnalyticsService } from './admin-analytics.service';
+import { AdminHealthService } from './admin-health.service';
 import { AdminJobsService } from './admin-jobs.service';
+import type { JobCurationPatch } from './admin-jobs.service';
 
 /** A job with no progress for this long is treated as stranded by a restart. */
 const DEFAULT_STUCK_MINUTES = 30;
@@ -28,9 +35,20 @@ export class AdminController {
   constructor(
     private readonly jobs: AdminJobsService,
     private readonly analytics: AdminAnalyticsService,
+    private readonly health: AdminHealthService,
     private readonly retention: RetentionService,
     private readonly affiliateConfig: AffiliateConfigService,
+    private readonly hostPolicy: HostPolicyService,
   ) {}
+
+  /**
+   * One-glance system health: DB, Playwright browsers, LLM keys, queue depth,
+   * and last-24h job success rate. First stop when jobs fail at scale.
+   */
+  @Get('health')
+  systemHealth() {
+    return this.health.check();
+  }
 
   @Get('jobs')
   listJobs(
@@ -59,9 +77,48 @@ export class AdminController {
   failStuck(@Body() body?: { olderThanMinutes?: number }) {
     const minutes = body?.olderThanMinutes ?? DEFAULT_STUCK_MINUTES;
     if (!Number.isFinite(minutes) || minutes < 1 || minutes > 1440) {
-      throw new BadRequestException('olderThanMinutes must be between 1 and 1440');
+      throw new BadRequestException(
+        'olderThanMinutes must be between 1 and 1440',
+      );
     }
     return this.jobs.failStuck(Math.floor(minutes));
+  }
+
+  /**
+   * Retry every job matching the list filters (status and/or keyword).
+   * Declared before `jobs/:id` so "batch-retry" is not parsed as an id.
+   */
+  @Post('jobs/batch-retry')
+  batchRetry(
+    @Body()
+    body?: {
+      status?: string;
+      keyword?: string;
+      limit?: number;
+    },
+  ) {
+    return this.jobs.batchRetry({
+      status: body?.status?.trim() || undefined,
+      keyword: body?.keyword?.trim() || undefined,
+      limit: this.clampOptionalLimit(body?.limit),
+    });
+  }
+
+  /** Delete every job matching the list filters (status and/or keyword). */
+  @Post('jobs/batch-delete')
+  batchDelete(
+    @Body()
+    body?: {
+      status?: string;
+      keyword?: string;
+      limit?: number;
+    },
+  ) {
+    return this.jobs.batchDelete({
+      status: body?.status?.trim() || undefined,
+      keyword: body?.keyword?.trim() || undefined,
+      limit: this.clampOptionalLimit(body?.limit),
+    });
   }
 
   @Get('jobs/:id')
@@ -74,9 +131,21 @@ export class AdminController {
     return this.jobs.retry(id);
   }
 
+  /** Stops a queued or running job; keeps its history for inspection / retry. */
+  @Post('jobs/:id/cancel')
+  cancelJob(@Param('id') id: string) {
+    return this.jobs.cancel(id);
+  }
+
   @Delete('jobs/:id')
   deleteJob(@Param('id') id: string) {
     return this.jobs.remove(id);
+  }
+
+  /** Sets explore-gallery curation flags (pin / hide / feature) on a job's itinerary. */
+  @Patch('jobs/:id/curation')
+  setJobCuration(@Param('id') id: string, @Body() body?: JobCurationPatch) {
+    return this.jobs.setCuration(id, body ?? {});
   }
 
   @Get('analytics/keywords')
@@ -84,6 +153,14 @@ export class AdminController {
     return this.analytics.keywords(
       this.parseInt(days, 30, 1, 365),
       this.parseInt(limit, 50, 1, 200),
+    );
+  }
+
+  @Get('analytics/failure-reasons')
+  failureReasons(@Query('days') days?: string, @Query('limit') limit?: string) {
+    return this.analytics.failureReasons(
+      this.parseInt(days, 30, 1, 365),
+      this.parseInt(limit, 10, 1, 50),
     );
   }
 
@@ -111,6 +188,42 @@ export class AdminController {
       this.parseInt(days, 30, 1, 365),
       this.parseInt(limit, 30, 1, 200),
     );
+  }
+
+  @Get('analytics/llm-usage')
+  llmUsage(@Query('days') days?: string) {
+    return this.analytics.llmUsage(this.parseInt(days, 30, 1, 365));
+  }
+
+  /** Manual allow / deny lists used by crawl URL selection. */
+  @Get('hosts/policy')
+  getHostPolicy() {
+    return this.hostPolicy.getLists();
+  }
+
+  /** Replace one or both host lists. Omitted fields are left unchanged. */
+  @Put('hosts/policy')
+  saveHostPolicy(
+    @Body() body?: { allowlist?: string[]; denylist?: string[] },
+  ) {
+    return this.hostPolicy.saveLists(body ?? {});
+  }
+
+  /**
+   * Set a single-host override: allow (whitelist), deny (blacklist), or clear.
+   * Used by the keywords → source hosts table actions.
+   */
+  @Put('hosts/override')
+  setHostOverride(@Body() body?: { host?: string; action?: string }) {
+    const host = body?.host;
+    const action = body?.action as HostOverrideAction | undefined;
+    if (!host || typeof host !== 'string') {
+      throw new BadRequestException('host is required');
+    }
+    if (action !== 'allow' && action !== 'deny' && action !== 'clear') {
+      throw new BadRequestException('action must be allow, deny, or clear');
+    }
+    return this.hostPolicy.setOverride(host, action);
   }
 
   @Get('analytics/affiliate')
@@ -158,5 +271,11 @@ export class AdminController {
     const value = Number(raw);
     if (!Number.isFinite(value)) return fallback;
     return Math.min(Math.max(Math.floor(value), min), max);
+  }
+
+  private clampOptionalLimit(raw: number | undefined): number | undefined {
+    if (raw === undefined || raw === null) return undefined;
+    if (!Number.isFinite(raw)) return undefined;
+    return Math.min(Math.max(Math.floor(raw), 1), 100);
   }
 }

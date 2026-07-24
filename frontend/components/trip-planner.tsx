@@ -34,6 +34,7 @@ import {
   type TripProgressEvent,
   type TripStatus,
 } from '@/lib/trip'
+import { validateKeyword, type KeywordErrorCode } from '@/lib/keyword-validator'
 import {
   addTripHistory,
   clearTripHistory,
@@ -73,6 +74,7 @@ async function fetchJob(jobId: string): Promise<StoredJob | null> {
 export function TripPlanner() {
   const { t, locale } = useLanguage()
   const [keyword, setKeyword] = useState('')
+  const [keywordError, setKeywordError] = useState<KeywordErrorCode | null>(null)
   const [preferences, setPreferences] = useState<TripPreferences>(
     EMPTY_TRIP_PREFERENCES,
   )
@@ -211,8 +213,16 @@ export function TripPlanner() {
           setHistory(markTripHistoryDone(jobId))
           window.history.replaceState(null, '', sharePath(jobId))
         }
-        if (payload.status === 'failed') setHistory(markTripHistoryDone(jobId))
-        if (payload.status === 'done' || payload.status === 'failed') stopStream()
+        if (payload.status === 'failed' || payload.status === 'cancelled') {
+          setHistory(markTripHistoryDone(jobId))
+        }
+        if (
+          payload.status === 'done' ||
+          payload.status === 'failed' ||
+          payload.status === 'cancelled'
+        ) {
+          stopStream()
+        }
       }
 
       source.onerror = () => {
@@ -221,7 +231,10 @@ export function TripPlanner() {
         // the backend was still happily working on.
         if (source.readyState !== EventSource.CLOSED) {
           setEvent((current) =>
-            current && current.status !== 'done'
+            current &&
+            current.status !== 'done' &&
+            current.status !== 'failed' &&
+            current.status !== 'cancelled'
               ? { ...current, message: t.tripPlanner.reconnecting }
               : current,
           )
@@ -269,11 +282,11 @@ export function TripPlanner() {
         settleDone(entry.jobId, job.itinerary.data, t.tripPlanner.loadedPrevious)
         return
       }
-      if (job.status === 'failed') {
+      if (job.status === 'failed' || job.status === 'cancelled') {
         setHistory(markTripHistoryDone(entry.jobId))
         setEvent({
           jobId: entry.jobId,
-          status: 'failed',
+          status: job.status === 'cancelled' ? 'cancelled' : 'failed',
           progress: 100,
           error: job.error ?? t.tripPlanner.planFailed,
         })
@@ -406,7 +419,11 @@ export function TripPlanner() {
     [loadStored, resume],
   )
 
-  const running = event !== null && event.status !== 'done' && event.status !== 'failed'
+  const running =
+    event !== null &&
+    event.status !== 'done' &&
+    event.status !== 'failed' &&
+    event.status !== 'cancelled'
   const showHistoryMenu = historyOpen && history.length > 0
 
   return (
@@ -495,7 +512,9 @@ export function TripPlanner() {
             <Input
               value={keyword}
               onChange={(inputEvent) => {
-                setKeyword(inputEvent.target.value)
+                const value = inputEvent.target.value
+                setKeyword(value)
+                setKeywordError(validateKeyword(value))
                 setHistoryOpen(true)
               }}
               // Escape closes the dropdown without moving focus, so onFocus
@@ -512,7 +531,7 @@ export function TripPlanner() {
               type="submit"
               size="lg"
               className="h-12 shrink-0 rounded-xl px-6 transition-transform active:scale-95"
-              disabled={!keyword.trim() || running || submitting}
+              disabled={!keyword.trim() || !!keywordError || running || submitting}
             >
               {running || submitting ? (
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -522,6 +541,12 @@ export function TripPlanner() {
               {running ? t.tripPlanner.planning : t.tripPlanner.depart}
             </Button>
           </div>
+
+          {keywordError && (
+            <p className="mt-1.5 px-2 text-sm text-destructive" role="alert">
+              {t.tripPlanner.keywordError[keywordError]}
+            </p>
+          )}
 
           {/* History dropdown: appears under the search box while it has focus. */}
           {showHistoryMenu && (
@@ -551,6 +576,7 @@ export function TripPlanner() {
               disabled={running || submitting}
               onClick={() => {
                 setKeyword(example.label)
+                setKeywordError(null)
                 void start(example.label)
               }}
               className="trip-lift rounded-full border border-border bg-card/70 px-4 py-2 text-sm text-secondary-foreground shadow-sm backdrop-blur hover:border-primary/40 hover:text-primary disabled:opacity-50"

@@ -3,7 +3,10 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
+  Activity,
+  Coins,
   Home,
+  LayoutDashboard,
   ListChecks,
   LogOut,
   MessageSquareText,
@@ -18,9 +21,12 @@ import { adminLogout } from '@/lib/admin'
 import { cn } from '@/lib/utils'
 
 const NAV_ITEMS = [
+  { href: '/admin', key: 'dashboard', icon: LayoutDashboard },
+  { href: '/admin/health', key: 'health', icon: Activity },
   { href: '/admin/jobs', key: 'jobs', icon: ListChecks },
   { href: '/admin/keywords', key: 'keywords', icon: TrendingUp },
   { href: '/admin/affiliate', key: 'affiliate', icon: ShoppingBag },
+  { href: '/admin/llm-usage', key: 'llmUsage', icon: Coins },
   { href: '/admin/prompts', key: 'prompts', icon: MessageSquareText },
   { href: '/admin/settings', key: 'settings', icon: Settings },
 ] as const
@@ -39,27 +45,34 @@ export function AdminNav() {
   }
 
   return (
-    <aside className="flex w-56 shrink-0 flex-col border-r bg-background">
+    <aside className="sticky top-0 flex h-screen w-56 shrink-0 flex-col border-r bg-background">
       <div className="border-b p-4">
         <p className="text-lg font-semibold">{t.admin.sidebarTitle}</p>
         <p className="text-xs text-muted-foreground">{t.admin.brand}</p>
       </div>
-      <nav className="flex-1 space-y-1 p-2">
-        {NAV_ITEMS.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              'flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors',
-              pathname.startsWith(item.href)
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-            )}
-          >
-            <item.icon className="h-4 w-4" />
-            {t.admin.nav[item.key]}
-          </Link>
-        ))}
+      <nav className="flex-1 space-y-1 overflow-y-auto p-2">
+        {NAV_ITEMS.map((item) => {
+          // `/admin` must match exactly; otherwise it highlights on every page.
+          const active =
+            item.href === '/admin'
+              ? pathname === '/admin'
+              : pathname.startsWith(item.href)
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                'flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors',
+                active
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
+            >
+              <item.icon className="h-4 w-4" />
+              {t.admin.nav[item.key]}
+            </Link>
+          )
+        })}
       </nav>
       <div className="space-y-1 border-t p-2">
         <div className="px-1 pb-1">
