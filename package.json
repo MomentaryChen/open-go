@@ -1,6 +1,7 @@
 {
   "name": "open-go",
   "private": true,
+  "license": "MIT",
   "version": "1.0.0",
   "packageManager": "pnpm@11.0.8",
   "scripts": {

@@ -78,6 +78,10 @@ export const zh = {
     connectionLost: '與伺服器的連線中斷',
     connectionLostResumable: '與伺服器的連線中斷，行程可能仍在產生中——稍後可從「先前的查詢」接續。',
     createJobFailed: '建立任務失敗 ({status})',
+    createError: {
+      TRIP_RATE_LIMITED: '這個位址的行程請求太頻繁，請稍後再試',
+      TRIP_PUBLIC_CREATE_DISABLED: '此站已關閉公開建立行程',
+    },
     readCacheFailed: '讀取快取結果失敗',
     keywordError: {
       KEYWORD_TOO_SHORT: '請輸入至少 2 個字的旅遊關鍵字',

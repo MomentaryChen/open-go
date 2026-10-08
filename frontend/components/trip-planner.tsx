@@ -352,8 +352,20 @@ export function TripPlanner() {
             ...(hasTripPreferences(preferences) ? { preferences } : {}),
           }),
         })
-        if (!response.ok)
-          throw new Error(fmt(t.tripPlanner.createJobFailed, { status: response.status }))
+        if (!response.ok) {
+          let code: string | undefined
+          try {
+            const body = (await response.json()) as { code?: unknown }
+            if (typeof body?.code === 'string') code = body.code
+          } catch {
+            // A non-JSON error page still surfaces the status below.
+          }
+          const known =
+            code && code in t.tripPlanner.createError
+              ? t.tripPlanner.createError[code as keyof typeof t.tripPlanner.createError]
+              : undefined
+          throw new Error(known ?? fmt(t.tripPlanner.createJobFailed, { status: response.status }))
+        }
 
         const { jobId, cached } = (await response.json()) as {
           jobId: string

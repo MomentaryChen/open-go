@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- Added an MIT license. Public `POST /trips` is capped per client address (default 5 per hour) and can be turned off with `TRIP_PUBLIC_CREATE=false`.
+- Added `TRIP_DEMO_MODE`: jobs finish with a labeled sample itinerary and do not call search, crawl, or an LLM, so the planner UI can be tried without API keys. Sample plans stay off the public gallery.
+
 ## [1.0.0] - 2026-07-24
 
 First public release of open-go: a keyword-driven AI travel planner with a grounded,
