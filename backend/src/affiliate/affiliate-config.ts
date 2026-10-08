@@ -63,6 +63,11 @@ export const AFFILIATE_CONFIG_FIELDS: AffiliateConfigField[] = [
   },
 ];
 
+/** Partner buttons stay visible unless this is explicitly `false`. */
+export function affiliateLinksEnabled(): boolean {
+  return process.env.TRIP_AFFILIATE_ENABLED !== 'false';
+}
+
 export function emptyAffiliateConfig(): AffiliateConfig {
   return {
     booking: { aid: '' },

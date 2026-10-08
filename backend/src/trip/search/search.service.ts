@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { tripConfig } from '../trip.config';
 import { SearchHit } from '../trip.types';
 import { DuckDuckGoSearchProvider } from './duckduckgo-search.provider';
 import {
@@ -24,6 +25,11 @@ export class SearchService {
   ) {}
 
   async search(query: string, limit: number): Promise<SearchOutcome> {
+    if (tripConfig.searchProvider === 'duckduckgo') {
+      const hits = await this.duckduckgo.search(query, limit);
+      return { hits, provider: this.duckduckgo.name, degraded: false };
+    }
+
     if (Date.now() >= this.googleBlockedUntil) {
       try {
         const hits = await this.google.search(query, limit);

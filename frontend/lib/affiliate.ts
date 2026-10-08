@@ -18,6 +18,8 @@ export type AffiliateCategory = 'lodging' | 'ticket'
  * stores the values). Blank = not configured → that param is omitted.
  */
 export type AffiliateConfig = {
+  /** From `GET /affiliate/config`. Absent or true keeps the partner buttons. */
+  enabled?: boolean
   booking: { aid: string }
   trip: { allianceid: string; sid: string }
   klook: { aid: string }
@@ -113,6 +115,8 @@ export function lodgingSearchLinks(
   coords?: { latitude: number; longitude: number } | null,
   config?: AffiliateConfig | null,
 ): AffiliateLink[] {
+  if (config?.enabled === false) return []
+
   const dest = destination.trim()
   const spot = cleanLocation(area)
   const query = (!dest || spot.includes(dest) ? spot : `${dest} ${spot}`).trim()
@@ -169,6 +173,8 @@ export function ticketSearchLinks(
   attractionName?: string | null,
   config?: AffiliateConfig | null,
 ): { primary: AffiliateLink[]; fallback: AffiliateLink[] } {
+  if (config?.enabled === false) return { primary: [], fallback: [] }
+
   const dest = destination.trim()
   const spot = (attractionName ?? '').trim()
   const primaryQuery =

@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Post } from '@nestjs/common';
+import { affiliateLinksEnabled } from './affiliate-config';
 import { AffiliateConfigService } from './affiliate-config.service';
 import {
   AFFILIATE_CATEGORIES,
@@ -31,8 +32,9 @@ export class AffiliateController {
    * outbound URLs. Values are non-secret (they appear in those URLs anyway).
    */
   @Get('config')
-  getConfig() {
-    return this.config.getConfig();
+  async getConfig() {
+    const config = await this.config.getConfig();
+    return { ...config, enabled: affiliateLinksEnabled() };
   }
 
   /** Public ingest for itinerary CTA funnel events (no admin key). */

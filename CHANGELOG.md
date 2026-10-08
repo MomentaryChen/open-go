@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 - Added an MIT license. Public `POST /trips` is capped per client address (default 5 per hour) and can be turned off with `TRIP_PUBLIC_CREATE=false`.
 - Added `TRIP_DEMO_MODE`: jobs finish with a labeled sample itinerary and do not call search, crawl, or an LLM, so the planner UI can be tried without API keys. Sample plans stay off the public gallery.
+- Added `TRIP_SEARCH_PROVIDER=duckduckgo` so a self-hosted server can search without launching Chromium. Google remains the default and still falls back when it is blocked.
+- Added `TRIP_AFFILIATE_ENABLED=false` to hide lodging and ticket partner buttons. They stay visible unless that variable is set.
+- Added `CONTRIBUTING.md` and `SECURITY.md`.
 
 ## [1.0.0] - 2026-07-24
 
