@@ -80,6 +80,10 @@ export const en: Dictionary = {
     connectionLostResumable:
       'Lost connection to the server. The itinerary may still be generating — resume it later from “Recent searches”.',
     createJobFailed: 'Failed to create job ({status})',
+    createError: {
+      TRIP_RATE_LIMITED: 'Too many trip requests from this address. Try again later.',
+      TRIP_PUBLIC_CREATE_DISABLED: 'This server is not accepting new public trip requests.',
+    },
     readCacheFailed: 'Failed to read the cached result',
     keywordError: {
       KEYWORD_TOO_SHORT: 'Please enter at least 2 characters',

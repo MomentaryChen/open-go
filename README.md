@@ -42,8 +42,12 @@ pnpm install
 2. Configure database
 
 ```bash
-copy backend/.env.example backend/.env
+cp backend/.env.example backend/.env
 ```
+
+To click through the planner before you have an LLM key, set `TRIP_DEMO_MODE=true`
+in that file. Jobs then finish with a labeled sample itinerary and do not call
+search or a model. Turn it off before exposing the server.
 
 3. Run migration and seed
 
@@ -96,6 +100,14 @@ pnpm dev:frontend
 The keyword is validated before the pipeline starts: URLs, HTML tags, control characters,
 symbol-only strings, and inputs with excessive special characters are rejected with a
 structured error (`{ code, message }`). The same rules run client-side for instant feedback.
+
+Public creates are capped per client address (`TRIP_CREATE_LIMIT`, default 5 per
+hour). Over the cap the API returns `429` with `code: TRIP_RATE_LIMITED`. Set
+`TRIP_PUBLIC_CREATE=false` to refuse new plans while leaving gallery and job
+reads open (`403`, `code: TRIP_PUBLIC_CREATE_DISABLED`). The counter is in-process
+and resets when the backend restarts. Set `TRIP_DEMO_MODE=true` to store a labeled
+sample itinerary instead of running search, crawl, and the LLM. Sample plans
+are hidden from `/explore`; open them from the planner or the job link.
 
 1. **planning** — the LLM splits the keyword into 6–10 search queries across attraction /
    food / transport / accommodation / itinerary intents, in mixed languages.
@@ -251,6 +263,10 @@ Env values act as the fallback when no DB setting exists.
 | `TRIP_CRAWL_CONCURRENCY` | `5` | Fallback for `trip.crawlConcurrency`. |
 | `TRIP_SEARCH_BROWSER` | `true` | Set `false` to skip Chromium and use the fallback engine only. |
 | `TRIP_BROWSER_HEADLESS` | `true` | Set `false` to watch the search browser while debugging. |
+| `TRIP_DEMO_MODE` | `false` | Set `true` to skip search, crawl, and the LLM and store a labeled sample itinerary. |
+| `TRIP_PUBLIC_CREATE` | `true` | Set `false` to reject `POST /trips`. Reads stay available. |
+| `TRIP_CREATE_LIMIT` | `5` | Accepted creates per client address per window. `0` disables the cap. |
+| `TRIP_CREATE_WINDOW_MS` | `3600000` | Length of the create-limit window, in milliseconds. |
 
 Frontend (server-side): `ADMIN_PASSWORD` (same value as the backend) and
 `BACKEND_INTERNAL_URL` (backend origin reachable from the frontend server — in docker
@@ -328,4 +344,10 @@ Host ports:
 - Postgres: `35432`
 
 Set `ADMIN_PASSWORD` in `infra/.env` before `docker:up` to enable the admin console at
-`http://localhost:35173/admin`.
+`http://localhost:35173/admin`. Copy `infra/.env.example` to `infra/.env` for the
+other pipeline variables, including `TRIP_DEMO_MODE` and the public create cap.
+
+## License
+
+[MIT](LICENSE). The npm packages stay `"private": true` so this application is not
+published as a library by mistake.

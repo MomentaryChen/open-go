@@ -10,6 +10,7 @@ import type { IngestPoiInput } from '../ingestion/ingestion.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { CrawlerService } from './crawler.service';
+import { buildDemoItinerary } from './demo-itinerary';
 import { STRUCTURED_LLM } from './llm/llm.types';
 import type { StructuredLlm } from './llm/llm.types';
 import { ItineraryComposerService } from './itinerary-composer.service';
@@ -259,7 +260,8 @@ export class TripService implements OnModuleInit {
       where: {
         status: 'done',
         createdAt: { gte: since },
-        itinerary: { isNot: null },
+        // Demo fixtures must not satisfy a later real request for the same keyword.
+        itinerary: { is: { model: { not: 'demo' } } },
       },
       orderBy: { createdAt: 'desc' },
       take: 200,
@@ -405,6 +407,10 @@ export class TripService implements OnModuleInit {
   ) {
     try {
       this.throwIfCancelled(signal);
+      if (tripConfig.demoMode) {
+        await this.runDemo(jobId, keyword, preferences, signal);
+        return;
+      }
       const cfg = await this.resolveRuntimeConfig();
       const plan = await this.runPlanning(jobId, keyword, preferences, signal);
       const urls = await this.runSearch(jobId, plan, cfg, signal);
@@ -471,6 +477,50 @@ export class TripService implements OnModuleInit {
       progress: current.progress,
       message: 'Cancelled',
       error: 'Cancelled by admin',
+    });
+  }
+
+  /**
+   * Stores a labeled fixture and marks the job done. No search, crawl, or LLM
+   * call. POI ingestion is skipped so the catalog does not fill with samples.
+   */
+  private async runDemo(
+    jobId: string,
+    keyword: string,
+    preferences: TripPreferences,
+    signal: AbortSignal,
+  ) {
+    this.throwIfCancelled(signal);
+    await this.publish(jobId, 'composing', 40, '示範模式：略過搜尋與 LLM');
+
+    const itinerary = buildDemoItinerary(keyword, preferences.durationDays);
+    this.throwIfCancelled(signal);
+
+    await this.prisma.tripItinerary.create({
+      data: {
+        jobId,
+        summary: itinerary.summary,
+        data: itinerary,
+        model: 'demo',
+        // Keep sample plans off the public gallery. The job page still opens them.
+        hidden: true,
+      },
+    });
+
+    const updated = await this.prisma.tripJob.updateMany({
+      where: { id: jobId, status: { in: ACTIVE_STATUSES } },
+      data: { status: 'done', progress: 100, message: '示範行程已完成' },
+    });
+    if (updated.count === 0) {
+      throw new TripCancelledError();
+    }
+
+    this.events.emit({
+      jobId,
+      status: 'done',
+      progress: 100,
+      message: '示範行程已完成',
+      itinerary,
     });
   }
 

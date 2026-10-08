@@ -32,6 +32,13 @@ export function parseLlmProvider(raw: string): LlmProvider | null {
   return value === 'anthropic' || value === 'gemini' ? value : null;
 }
 
+function intEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : fallback;
+}
+
 export const tripConfig = {
   targetDocuments: Number(process.env.TRIP_TARGET_DOCUMENTS ?? 30),
   crawlConcurrency: Number(process.env.TRIP_CRAWL_CONCURRENCY ?? 5),
@@ -57,6 +64,19 @@ export const tripConfig = {
   resultsPerQuery: 12,
   /** Max documents allowed from the same host, to keep sources diverse. */
   maxDocumentsPerHost: 3,
+  /**
+   * Skip search, crawl, and the LLM. `POST /trips` still runs and stores a
+   * labeled fixture itinerary so the UI can be tried without API keys.
+   */
+  demoMode: process.env.TRIP_DEMO_MODE === 'true',
+  /** When false, `POST /trips` is rejected. Gallery and job reads stay open. */
+  publicCreate: process.env.TRIP_PUBLIC_CREATE !== 'false',
+  /**
+   * Accepted `POST /trips` calls per client address per window. `0` disables
+   * the cap. The counter is in-process; see trip-create-limit.ts.
+   */
+  createLimit: intEnv('TRIP_CREATE_LIMIT', 5),
+  createWindowMs: intEnv('TRIP_CREATE_WINDOW_MS', 60 * 60 * 1000),
   /** Google only serves results to a real browser; set false to force the fallback engine. */
   useBrowserSearch: process.env.TRIP_SEARCH_BROWSER !== 'false',
   browserHeadless: process.env.TRIP_BROWSER_HEADLESS !== 'false',

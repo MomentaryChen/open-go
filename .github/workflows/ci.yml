@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.0.8
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+
+      - name: Generate Prisma client
+        run: pnpm --filter backend exec prisma generate
+
+      - name: Backend unit tests
+        run: pnpm --filter backend test
+
+      - name: Backend typecheck
+        run: pnpm --filter backend exec -- tsc --noEmit --pretty false
+
+      - name: Frontend typecheck
+        run: pnpm --filter ./frontend exec -- tsc --noEmit --pretty false
+
+      - name: Validate Docker Compose
+        run: docker compose -f infra/docker-compose.yml config --quiet

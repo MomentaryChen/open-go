@@ -11,6 +11,7 @@ import { DuckDuckGoSearchProvider } from './search/duckduckgo-search.provider';
 import { GoogleSearchProvider } from './search/google-search.provider';
 import { SearchService } from './search/search.service';
 import { HostPolicyService } from './host-policy.service';
+import { TripCreateLimitService } from './trip-create-limit.service';
 import { TripController } from './trip.controller';
 import { TripEventsService } from './trip-events.service';
 import { TripQueueService } from './trip-queue.service';
@@ -28,6 +29,7 @@ import { TripService } from './trip.service';
     ItineraryComposerService,
     KeywordPlannerService,
     SearchService,
+    TripCreateLimitService,
     TripEventsService,
     TripQueueService,
     TripService,
