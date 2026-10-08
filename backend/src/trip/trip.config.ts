@@ -26,6 +26,18 @@ export function defaultModelFor(provider: LlmProvider): string {
   return process.env.TRIP_MODEL || DEFAULT_MODEL[provider];
 }
 
+export type SearchEngine = 'google' | 'duckduckgo';
+
+/**
+ * `google` is the default and falls back to DuckDuckGo when blocked.
+ * `duckduckgo` / `ddg` never launches Chromium. Anything else stays on Google.
+ */
+export function parseSearchProvider(raw: string | undefined): SearchEngine {
+  const value = (raw ?? '').trim().toLowerCase();
+  if (value === 'duckduckgo' || value === 'ddg') return 'duckduckgo';
+  return 'google';
+}
+
 /** Normalize a provider name; returns null for unknown values. */
 export function parseLlmProvider(raw: string): LlmProvider | null {
   const value = raw.trim().toLowerCase();
@@ -77,6 +89,11 @@ export const tripConfig = {
    */
   createLimit: intEnv('TRIP_CREATE_LIMIT', 5),
   createWindowMs: intEnv('TRIP_CREATE_WINDOW_MS', 60 * 60 * 1000),
+  /**
+   * Primary web search engine. `duckduckgo` skips Chromium entirely.
+   * `google` still falls back to DuckDuckGo when the browser search is blocked.
+   */
+  searchProvider: parseSearchProvider(process.env.TRIP_SEARCH_PROVIDER),
   /** Google only serves results to a real browser; set false to force the fallback engine. */
   useBrowserSearch: process.env.TRIP_SEARCH_BROWSER !== 'false',
   browserHeadless: process.env.TRIP_BROWSER_HEADLESS !== 'false',

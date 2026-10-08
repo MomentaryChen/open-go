@@ -231,11 +231,8 @@ export function ItineraryView({
                         </p>
                       ) : null
                     })()}
-                    <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                      <span className="text-xs text-muted-foreground">
-                        {t.itinerary.searchHotels}
-                      </span>
-                      {lodgingSearchLinks(
+                    {(() => {
+                      const lodgingLinks = lodgingSearchLinks(
                         itinerary.destination,
                         day.stay.area,
                         typeof day.stay.latitude === 'number' &&
@@ -246,18 +243,27 @@ export function ItineraryView({
                             }
                           : null,
                         affiliateConfig,
-                      ).map((link) => (
-                        <AffiliateCta
-                          key={link.partner}
-                          link={link}
-                          jobId={jobId}
-                          day={day.day}
-                          category="lodging"
-                          contextLabel={day.stay!.area}
-                          className={LODGING_CTA_CLASS}
-                        />
-                      ))}
-                    </div>
+                      )
+                      if (lodgingLinks.length === 0) return null
+                      return (
+                        <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            {t.itinerary.searchHotels}
+                          </span>
+                          {lodgingLinks.map((link) => (
+                            <AffiliateCta
+                              key={link.partner}
+                              link={link}
+                              jobId={jobId}
+                              day={day.day}
+                              category="lodging"
+                              contextLabel={day.stay!.area}
+                              className={LODGING_CTA_CLASS}
+                            />
+                          ))}
+                        </div>
+                      )
+                    })()}
                   </div>
                 </div>
               )}

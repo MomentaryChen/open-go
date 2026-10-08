@@ -133,7 +133,9 @@ plans can be discovered by search engines.
 
 ### Booking & ticket deep links
 
-Finished itineraries surface outbound CTAs (visually separate from cited sources):
+Finished itineraries surface outbound CTAs (visually separate from cited sources).
+Set `TRIP_AFFILIATE_ENABLED=false` to hide the partner buttons. The default is on,
+so an existing site keeps them. Affiliate ids stay blank until an admin fills them in.
 
 - **Lodging** — each day's overnight stay area links to Booking.com, Agoda, and Google
   Hotels. When the stay has coordinates, Booking / Agoda searches use a ~3 km radius
@@ -245,6 +247,10 @@ If Google still blocks (or `TRIP_SEARCH_BROWSER=false`), the pipeline falls back
 `lite.duckduckgo.com`, which returns server-rendered HTML, and says so in the job's
 progress message.
 
+Set `TRIP_SEARCH_PROVIDER=duckduckgo` to skip Chromium and use that engine as the
+primary search. The job is not marked degraded, because the fallback was a choice.
+`google` remains the default.
+
 The backend image installs Chromium via `npx playwright install --with-deps chromium`, which
 is why it is Debian-based rather than Alpine — Playwright's Chromium build is glibc-only.
 
@@ -261,7 +267,9 @@ Env values act as the fallback when no DB setting exists.
 | `ANTHROPIC_API_KEY` | — | Required when the provider is `anthropic`. |
 | `TRIP_TARGET_DOCUMENTS` | `30` | Fallback for `trip.targetDocuments`; also seeds its initial value. |
 | `TRIP_CRAWL_CONCURRENCY` | `5` | Fallback for `trip.crawlConcurrency`. |
+| `TRIP_SEARCH_PROVIDER` | `google` | `google` or `duckduckgo`. `duckduckgo` never launches Chromium. |
 | `TRIP_SEARCH_BROWSER` | `true` | Set `false` to skip Chromium and use the fallback engine only. |
+| `TRIP_AFFILIATE_ENABLED` | `true` | Set `false` to hide lodging and ticket partner buttons. |
 | `TRIP_BROWSER_HEADLESS` | `true` | Set `false` to watch the search browser while debugging. |
 | `TRIP_DEMO_MODE` | `false` | Set `true` to skip search, crawl, and the LLM and store a labeled sample itinerary. |
 | `TRIP_PUBLIC_CREATE` | `true` | Set `false` to reject `POST /trips`. Reads stay available. |
@@ -346,6 +354,15 @@ Host ports:
 Set `ADMIN_PASSWORD` in `infra/.env` before `docker:up` to enable the admin console at
 `http://localhost:35173/admin`. Copy `infra/.env.example` to `infra/.env` for the
 other pipeline variables, including `TRIP_DEMO_MODE` and the public create cap.
+
+## Single-process limits
+
+This backend is a single process: the job queue, the public create counter, and the
+Google-block backoff are not shared across replicas. `trip.maxConcurrentJobs`
+(default 3) is the supported ceiling.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup and [SECURITY.md](SECURITY.md)
+for reporting vulnerabilities.
 
 ## License
 
